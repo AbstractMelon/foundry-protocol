@@ -1,10 +1,7 @@
 #!/bin/bash
 
-# Start the decaf server
-go run ./server/decaf/main.go &
-
 # Start the velocity server
-node ./server/velocity/src/index.js &
+go run ./server/main.go &
 
 # Start the gateway
 go run ./gateway/main.go &

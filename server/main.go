@@ -5,5 +5,5 @@ import (
 )
 
 func main() {
-	fmt.Println("Decaf Server Initialized")
+	fmt.Println("Velocity Server Initialized")
 }

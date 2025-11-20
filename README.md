@@ -1,2 +1,2 @@
-# foundry-protocol
+# Foundry Protocol
 Multiplayer topdown factory game

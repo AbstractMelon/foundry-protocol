@@ -1,0 +1,3 @@
+addr: ":8080"
+servers_file: "gateway/servers.yaml"
+api_key: "dev-change-me"

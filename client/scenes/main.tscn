@@ -1,0 +1,88 @@
+[gd_scene format=3 uid="uid://dh8gkydxi7l8j"]
+
+[ext_resource type="Script" uid="uid://b3ggv2c3t8qif" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="Script" uid="uid://dl3qgoxeiaw82" path="res://scripts/entity_layer.gd" id="2_layer"]
+[ext_resource type="AudioStream" uid="uid://5pyt52sqdnsb" path="res://music/FullyAutomated.mp3" id="3_sugp2"]
+
+[node name="Main" type="Node2D" unique_id=877070783]
+script = ExtResource("1_main")
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1057614312]
+
+[node name="EntityLayer" type="Node2D" parent="." unique_id=1744447629]
+script = ExtResource("2_layer")
+
+[node name="UI" type="CanvasLayer" parent="." unique_id=1647764753]
+
+[node name="Root" type="Control" parent="UI" unique_id=1659169281]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="HUD" type="Label" parent="UI/Root" unique_id=1920531133]
+layout_mode = 1
+offset_left = 8.0
+offset_top = 8.0
+
+[node name="Materials" type="Label" parent="UI/Root" unique_id=446263482]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -260.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = 260.0
+grow_horizontal = 0
+horizontal_alignment = 2
+
+[node name="ChatLog" type="Label" parent="UI/Root" unique_id=1408389584]
+layout_mode = 1
+offset_left = 8.0
+offset_top = 56.0
+offset_right = 620.0
+offset_bottom = 260.0
+
+[node name="Palette" type="HBoxContainer" parent="UI/Root" unique_id=683150309]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 8.0
+offset_bottom = 44.0
+grow_horizontal = 2
+mouse_filter = 2
+alignment = 1
+
+[node name="ConsoleHint" type="Label" parent="UI/Root" unique_id=250225924]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = -38.0
+offset_right = -8.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 0
+text = "press Enter to chat (dev: /give copper 500)"
+horizontal_alignment = 1
+
+[node name="Console" type="LineEdit" parent="UI/Root" unique_id=1965514418]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -24.0
+grow_horizontal = 2
+grow_vertical = 0
+placeholder_text = "Type a message or /dev command... (Esc to close)"
+
+[node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="." unique_id=11040232]
+stream = ExtResource("3_sugp2")
+autoplay = true

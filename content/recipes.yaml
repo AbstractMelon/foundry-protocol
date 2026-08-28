@@ -1,0 +1,21 @@
+recipes:
+  - id: mine_ore
+    name: Mine Ore
+    category: extraction
+    input: {}
+    output: {}
+    duration_ticks: 25
+
+  - id: smelt_copper
+    name: Smelt Copper
+    category: smelting
+    input: { copper: 2 }
+    output: { copper_bar: 1 }
+    duration_ticks: 20
+
+  - id: smelt_iron
+    name: Smelt Iron
+    category: smelting
+    input: { iron: 2 }
+    output: { iron_bar: 1 }
+    duration_ticks: 20

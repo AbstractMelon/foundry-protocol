@@ -1,0 +1,22 @@
+root = "."
+tmp_dir = "tmp/air/world"
+testdata_dir = "tmp"
+
+[build]
+  cmd = "go build -o tmp/air/world/world ./cmd/world"
+  bin = "./tmp/air/world/world"
+  full_bin = "tmp/air/world/world -dev -addr :8090"
+  delay = 500
+  exclude_dir = ["client", "gateway", "saves", "tmp", ".git"]
+  exclude_regex = ["_test.go"]
+  include_dir = ["cmd/world", "content", "protocol", "server", "world", "assets"]
+  include_ext = ["go", "yaml", "png"]
+  kill_delay = "1s"
+  send_interrupt = true
+  stop_on_error = true
+
+[log]
+  time = true
+
+[screen]
+  clear_on_rebuild = true

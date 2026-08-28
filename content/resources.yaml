@@ -1,0 +1,36 @@
+resources:
+  - id: copper
+    name: Copper
+    color: "#e8835b"
+    stack_size: 100
+    texture: copper.png
+    can_place_on: [grass, grass_dry, sand, rock]
+    yield: 800
+
+  - id: copper_bar
+    name: Copper Bar
+    color: "#e0653d"
+    stack_size: 100
+    texture: copper_bar.png
+
+  - id: iron
+    name: Iron
+    color: "#c8cdd2"
+    stack_size: 100
+    texture: iron.png
+    can_place_on: [grass, grass_dry, sand, rock]
+    yield: 600
+
+  - id: iron_bar
+    name: Iron Bar
+    color: "#9aa3ad"
+    stack_size: 100
+    texture: iron_bar.png
+
+  - id: coal
+    name: Coal
+    color: "#3c3c3c"
+    stack_size: 200
+    texture: coal.png
+    can_place_on: [grass, grass_dry, sand, rock]
+    yield: 900

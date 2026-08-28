@@ -1,0 +1,257 @@
+extends Node2D
+
+@onready var layer: Node2D = $EntityLayer
+@onready var camera: Camera2D = $Camera2D
+@onready var hud_label: Label = $UI/Root/HUD
+@onready var materials_label: Label = $UI/Root/Materials
+@onready var chat_log: Label = $UI/Root/ChatLog
+@onready var console: LineEdit = $UI/Root/Console
+@onready var console_hint: Label = $UI/Root/ConsoleHint
+@onready var palette: HBoxContainer = $UI/Root/Palette
+
+var _buildings: Dictionary = {}
+var _selected := ""
+var _remove_mode := false
+var _chat_lines: Array[String] = []
+var _frame := 0
+var _panning := false
+var _pan_origin := Vector2.ZERO
+var _cam_origin := Vector2.ZERO
+var _debug_visible := false
+
+const PAN_SPEED := 420.0
+const PAN_SPEED_FAST := 1250.0
+const ZOOM_STEP := 1.12
+const ZOOM_MIN := 0.35
+const ZOOM_MAX := 3.0
+
+
+func _ready() -> void:
+	palette.visible = false
+	console.visible = false
+	console_hint.visible = true
+
+	NetworkManager.welcome_received.connect(_on_welcome)
+	NetworkManager.snapshot_received.connect(_on_snapshot)
+	NetworkManager.diff_received.connect(_on_diff)
+	NetworkManager.chat_received.connect(_on_chat_received)
+	NetworkManager.system_received.connect(_on_system_received)
+	NetworkManager.disconnected.connect(_on_disconnected)
+	console.text_submitted.connect(_on_console_submitted)
+
+	if NetworkManager.auto_connect:
+		hud_label.text = "connecting to %s..." % NetworkManager.ws_url
+	else:
+		NetworkManager.connect_to_server(NetworkManager.ws_url)
+		hud_label.text = "connecting to %s..." % NetworkManager.ws_url
+
+	_set_debug(false)
+
+
+func _process(delta: float) -> void:
+	if not console.has_focus():
+		var dir := Vector2.ZERO
+		if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+			dir.y -= 1.0
+		if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+			dir.y += 1.0
+		if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+			dir.x -= 1.0
+		if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+			dir.x += 1.0
+		if dir != Vector2.ZERO:
+			var speed := PAN_SPEED
+			if Input.is_key_pressed(KEY_SHIFT):
+				speed = PAN_SPEED_FAST
+			camera.position += dir.normalized() * speed * delta
+
+	_frame += 1
+	if _frame % 15 != 0:
+		return
+	materials_label.text = _materials_text(layer.get_player(NetworkManager.player_id))
+	if not _debug_visible:
+		return
+	var state := "offline"
+	if NetworkManager.is_connected_to_server():
+		state = "online"
+	var ping := NetworkManager.get_ping()
+	hud_label.text = "state: %s  |  fps: %d  |  tick: %d  |  entities: %d  |  ping: %dms" % [
+		state, Engine.get_frames_per_second(), NetworkManager.last_tick, layer.entity_count(), int(ping)
+	]
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_MIDDLE:
+		if event.pressed:
+			_panning = true
+			_pan_origin = event.position
+			_cam_origin = camera.position
+		else:
+			_panning = false
+		return
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_zoom(ZOOM_STEP)
+			return
+		if event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_zoom(1.0 / ZOOM_STEP)
+			return
+	if event is InputEventMouseMotion and _panning:
+		camera.position = _cam_origin - (event.position - _pan_origin)
+		return
+	if event is InputEventMouseButton and event.pressed and NetworkManager.is_connected_to_server():
+		var tile: Vector2i = layer.world_to_tile(get_global_mouse_position())
+		if event.button_index == MOUSE_BUTTON_RIGHT:
+			var e: Dictionary = layer.entity_at_tile(tile)
+			if not e.is_empty():
+				NetworkManager.remove(int(e.get("id", -1)))
+		elif event.button_index == MOUSE_BUTTON_LEFT:
+			if _remove_mode:
+				var e: Dictionary = layer.entity_at_tile(tile)
+				if not e.is_empty():
+					NetworkManager.remove(int(e.get("id", -1)))
+			elif _selected != "":
+				NetworkManager.place(_selected, tile.x, tile.y)
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_F12:
+			_set_debug(not _debug_visible)
+		elif event.keycode == KEY_ENTER and not console.has_focus():
+			_show_console()
+		elif event.keycode == KEY_ESCAPE and console.has_focus():
+			_hide_console()
+
+
+func _set_debug(on: bool) -> void:
+	_debug_visible = on
+	hud_label.visible = on
+
+
+func _zoom(factor: float) -> void:
+	var new_zoom: Vector2 = camera.zoom * factor
+	new_zoom = new_zoom.clampf(ZOOM_MIN, ZOOM_MAX)
+	if new_zoom == camera.zoom:
+		return
+	var mouse_world := get_global_mouse_position()
+	var screen_offset: Vector2 = get_viewport().get_mouse_position() - get_viewport_rect().size * 0.5
+	camera.zoom = new_zoom
+	camera.position = mouse_world - screen_offset / new_zoom
+
+
+func _on_welcome(msg: Dictionary) -> void:
+	_buildings.clear()
+	for b in msg.get("content", {}).get("buildings", []):
+		_buildings[b.get("id", "")] = b
+	layer.set_content(msg.get("content", {}))
+	layer.apply_snapshot(msg.get("snapshot", {}))
+	_build_palette()
+	_add_chat("system", "joined world '%s' as %s" % [msg.get("text", ""), msg.get("player_name", "")])
+
+
+func _on_snapshot(msg: Dictionary) -> void:
+	layer.apply_snapshot(msg.get("snapshot", {}))
+
+
+func _on_diff(msg: Dictionary) -> void:
+	layer.apply_diff(msg.get("diff", {}))
+
+
+func _on_disconnected() -> void:
+	hud_label.text = "disconnected - retrying in 2s..."
+
+
+func _on_chat_received(msg: Dictionary) -> void:
+	_add_chat(str(msg.get("player_name", "?")), str(msg.get("text", "")))
+
+
+func _on_system_received(msg: Dictionary) -> void:
+	_add_chat("system", str(msg.get("text", "")))
+
+
+func _add_chat(who: String, text: String) -> void:
+	var line := "%s: %s" % [who, text]
+	_chat_lines.push_back(line)
+	if _chat_lines.size() > 9:
+		_chat_lines.pop_front()
+	chat_log.text = "\n".join(_chat_lines)
+
+
+func _build_palette() -> void:
+	for c in palette.get_children():
+		c.queue_free()
+
+	var remove_btn := Button.new()
+	remove_btn.text = "remove"
+	remove_btn.toggle_mode = true
+	remove_btn.set_meta("id", "remove")
+	remove_btn.toggled.connect(_on_tool_toggled.bind("remove"))
+	palette.add_child(remove_btn)
+
+	for id in _buildings:
+		var btn := Button.new()
+		var def: Dictionary = _buildings[id]
+		btn.text = "%s  [%s]" % [def.get("name", id), _cost_text(def.get("cost", {}))]
+		btn.toggle_mode = true
+		btn.set_meta("id", id)
+		btn.toggled.connect(_on_tool_toggled.bind(id))
+		palette.add_child(btn)
+
+	palette.visible = true
+
+
+func _on_tool_toggled(pressed: bool, id: String) -> void:
+	if not pressed:
+		if (_remove_mode and id == "remove") or (_selected == id and not _remove_mode):
+			_selected = ""
+			_remove_mode = false
+		return
+	_remove_mode = id == "remove"
+	_selected = "" if _remove_mode else id
+	for c in palette.get_children():
+		if c is Button and c.has_meta("id") and c.get_meta("id") != id and c.button_pressed:
+			c.set_pressed_no_signal(false)
+
+
+func _cost_text(cost: Dictionary) -> String:
+	var parts: Array[String] = []
+	for res in cost:
+		parts.append("%s %d" % ["%s" % res, cost[res]])
+	return ", ".join(parts)
+
+
+func _materials_text(player: Dictionary) -> String:
+	if player.is_empty():
+		return ""
+	var mats: Dictionary = player.get("resources", {})
+	if mats.is_empty():
+		return "no materials"
+	var lines: Array[String] = []
+	for res in mats:
+		var def: Dictionary = layer.resource_def(res)
+		var name: String = str(def.get("name", res))
+		lines.append("%s: %d" % [name, int(mats[res])])
+	lines.sort()
+	return "\n".join(lines)
+
+
+func _show_console() -> void:
+	console.visible = true
+	console_hint.visible = false
+	console.grab_focus()
+
+
+func _hide_console() -> void:
+	console.visible = false
+	console_hint.visible = true
+
+
+func _on_console_submitted(text: String) -> void:
+	if text.strip_edges() != "":
+		NetworkManager.chat(text)
+		if not text.begins_with("/"):
+			var who := "you" if NetworkManager.player_id != "" else str(NetworkManager.player_id)
+			_add_chat(who, text)
+	console.clear()
+	_hide_console()

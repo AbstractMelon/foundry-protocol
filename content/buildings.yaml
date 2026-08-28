@@ -1,0 +1,44 @@
+buildings:
+  - id: miner
+    name: Miner
+    category: production
+    color: "#c96a1f"
+    texture: miner.png
+    health: 300
+    cost: { copper: 30 }
+    recipe: mine_ore
+    storage: { copper: 100, iron: 100, coal: 100 }
+
+  - id: smelter
+    name: Smelter
+    category: production
+    color: "#9b59b6"
+    texture: smelter.png
+    health: 250
+    cost: { copper_bar: 20, iron: 10 }
+    recipe: smelt_copper
+    storage: { copper: 100, copper_bar: 100, iron: 100, iron_bar: 100 }
+
+  - id: wall
+    name: Wall
+    category: defense
+    color: "#6b7075"
+    texture: wall.png
+    health: 800
+    cost: { iron: 20 }
+
+  - id: belt
+    name: Belt
+    category: logistics
+    color: "#55606b"
+    texture: belt.png
+    health: 60
+    cost: { iron: 5 }
+
+  - id: hub
+    name: Hub
+    category: logistics
+    color: "#2c3e50"
+    texture: hub.png
+    health: 500
+    cost: {}

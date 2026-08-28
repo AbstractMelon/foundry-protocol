@@ -1,0 +1,7 @@
+servers:
+  - id: local-dev
+    name: Local Dev World
+    description: Ephemeral development world running on this machine
+    ws_url: "ws://localhost:8090/ws"
+    owner: dev
+    max_players: 12

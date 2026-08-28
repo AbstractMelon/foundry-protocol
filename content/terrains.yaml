@@ -1,0 +1,44 @@
+terrains:
+  - id: grass
+    name: Grass
+    category: ground
+    color: "#4c8c3f"
+    texture: grass.png
+    buildable: true
+    base: true
+
+  - id: grass_dry
+    name: Dry Grass
+    category: ground
+    color: "#8ba14c"
+    texture: grass_dry.png
+    buildable: true
+
+  - id: sand
+    name: Sand
+    category: ground
+    color: "#d9c27a"
+    texture: sand.png
+    buildable: true
+
+  - id: rock
+    name: Rock
+    category: ground
+    color: "#7d8084"
+    texture: rock.png
+    buildable: true
+    base: true
+
+  - id: water
+    name: Water
+    category: obstacle
+    color: "#3d7ea6"
+    texture: water.png
+    buildable: false
+
+  - id: void
+    name: Void
+    category: edge
+    color: "#15181c"
+    texture: void.png
+    buildable: false

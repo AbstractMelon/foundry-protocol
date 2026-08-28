@@ -1,0 +1,22 @@
+root = "."
+tmp_dir = "tmp/air/gateway"
+testdata_dir = "tmp"
+
+[build]
+  cmd = "go build -o tmp/air/gateway/gateway ./cmd/gateway"
+  bin = "./tmp/air/gateway/gateway"
+  full_bin = "tmp/air/gateway/gateway -config gateway/gateway.yaml"
+  delay = 500
+  exclude_dir = ["client", "server", "world", "content", "saves", "tmp", ".git"]
+  exclude_regex = ["_test.go"]
+  include_dir = ["cmd/gateway", "gateway", "protocol"]
+  include_ext = ["go", "yaml"]
+  kill_delay = "1s"
+  send_interrupt = true
+  stop_on_error = true
+
+[log]
+  time = true
+
+[screen]
+  clear_on_rebuild = true

@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func (w *World) PlaceBuilding(playerID, buildingType string, x, y int) error {
+func (w *World) PlaceBuilding(playerID, buildingType string, x, y int, dir ...int) error {
 	p := w.players[playerID]
 	if p == nil {
 		return errors.New("unknown player")
@@ -33,6 +33,11 @@ func (w *World) PlaceBuilding(playerID, buildingType string, x, y int) error {
 	}
 	w.changedPlayers[playerID] = true
 
+	d := DirEast
+	if len(dir) > 0 {
+		d = ((dir[0] % 4) + 4) % 4
+	}
+
 	e := &Entity{
 		ID:      w.nextID,
 		Type:    buildingType,
@@ -40,7 +45,7 @@ func (w *World) PlaceBuilding(playerID, buildingType string, x, y int) error {
 		X:       x,
 		Y:       y,
 		Health:  def.Health,
-		Dir:     DirEast,
+		Dir:     d,
 		Stock:   map[string]int{},
 	}
 	w.nextID++

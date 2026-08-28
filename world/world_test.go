@@ -59,6 +59,39 @@ func TestPlaceBuildingDeductions(t *testing.T) {
 	}
 }
 
+func TestPlaceBuildingRotation(t *testing.T) {
+	reg, _ := content.LoadDir("../content")
+	w := New(reg)
+	p := w.AddPlayer("p1", "Dev")
+	for _, id := range reg.ResourceIDs() {
+		p.Resources[id] = 1000
+	}
+	if err := w.PlaceBuilding(p.ID, "belt", 3, 3, 2); err != nil {
+		t.Fatalf("place rotated: %v", err)
+	}
+	if got := w.EntityAt(3, 3).Dir; got != DirSouth {
+		t.Fatalf("expected dir south(2), got %d", got)
+	}
+	if err := w.PlaceBuilding(p.ID, "belt", 4, 3); err != nil {
+		t.Fatalf("place default: %v", err)
+	}
+	if got := w.EntityAt(4, 3).Dir; got != DirEast {
+		t.Fatalf("expected default dir east(1), got %d", got)
+	}
+	if err := w.PlaceBuilding(p.ID, "belt", 5, 3, 9); err != nil {
+		t.Fatalf("place out-of-range dir: %v", err)
+	}
+	if got := w.EntityAt(5, 3).Dir; got != DirEast {
+		t.Fatalf("expected dir normalized to east(1), got %d", got)
+	}
+	if err := w.PlaceBuilding(p.ID, "belt", 6, 3, 0); err != nil {
+		t.Fatalf("place north dir: %v", err)
+	}
+	if got := w.EntityAt(6, 3).Dir; got != DirNorth {
+		t.Fatalf("expected dir north(0), got %d", got)
+	}
+}
+
 func TestClearAllEntities(t *testing.T) {
 	reg, _ := content.LoadDir("../content")
 	w := New(reg)

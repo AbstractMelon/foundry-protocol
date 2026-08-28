@@ -12,6 +12,7 @@ extends Node2D
 var _buildings: Dictionary = {}
 var _selected := ""
 var _remove_mode := false
+var _rotation := 1
 var _chat_lines: Array[String] = []
 var _frame := 0
 var _panning := false
@@ -66,6 +67,7 @@ func _process(delta: float) -> void:
 			camera.position += dir.normalized() * speed * delta
 
 	_frame += 1
+	_update_preview()
 	if _frame % 15 != 0:
 		return
 	materials_label.text = _materials_text(layer.get_player(NetworkManager.player_id))
@@ -111,7 +113,15 @@ func _unhandled_input(event: InputEvent) -> void:
 				if not e.is_empty():
 					NetworkManager.remove(int(e.get("id", -1)))
 			elif _selected != "":
-				NetworkManager.place(_selected, tile.x, tile.y)
+				NetworkManager.place(_selected, tile.x, tile.y, _rotation)
+
+
+func _update_preview() -> void:
+	if _selected == "" or NetworkManager.player_id == "":
+		layer.clear_preview()
+		return
+	var tile: Vector2i = layer.world_to_tile(get_global_mouse_position())
+	layer.set_preview(_selected, tile, _rotation, NetworkManager.player_id)
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -122,6 +132,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_show_console()
 		elif event.keycode == KEY_ESCAPE and console.has_focus():
 			_hide_console()
+		elif event.keycode == KEY_R and _selected != "":
+			_rotation = (_rotation + 1) % 4
+			_update_preview()
 
 
 func _set_debug(on: bool) -> void:
@@ -206,12 +219,15 @@ func _on_tool_toggled(pressed: bool, id: String) -> void:
 		if (_remove_mode and id == "remove") or (_selected == id and not _remove_mode):
 			_selected = ""
 			_remove_mode = false
+			layer.clear_preview()
 		return
 	_remove_mode = id == "remove"
 	_selected = "" if _remove_mode else id
+	_rotation = 1
 	for c in palette.get_children():
 		if c is Button and c.has_meta("id") and c.get_meta("id") != id and c.button_pressed:
 			c.set_pressed_no_signal(false)
+	_update_preview()
 
 
 func _cost_text(cost: Dictionary) -> String:

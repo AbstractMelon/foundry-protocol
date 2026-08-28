@@ -1,6 +1,8 @@
 extends Node2D
 
 const FALLBACK_TILE := 48
+const DEFAULT_DIR := 1
+const BELT_CROSS_SECONDS := 0.8
 
 var _tile_size := FALLBACK_TILE
 var _entities := {}
@@ -11,9 +13,38 @@ var _terrain := {}
 var _players := {}
 var _textures := {}
 
+var _preview_def_id := ""
+var _preview_tile := Vector2i.ZERO
+var _preview_dir := DEFAULT_DIR
+var _preview_player_id := ""
+
+var _anim := 0.0
+
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+
+
+func _process(delta: float) -> void:
+	if not _has_belt_items():
+		return
+	_anim = fposmod(_anim + delta / BELT_CROSS_SECONDS, 1.0)
+	queue_redraw()
+
+
+func _has_belt_items() -> bool:
+	for e in _entities.values():
+		var def: Dictionary = _buildings.get(e.get("type", ""), {})
+		if str(def.get("category", "")) != "logistics":
+			continue
+		if str(e.get("type", "")) == "hub":
+			continue
+		var total := 0
+		for qty in e.get("stock", {}):
+			total += int(qty)
+		if total > 0:
+			return true
+	return false
 
 
 func set_content(bundle: Dictionary) -> void:
@@ -74,6 +105,29 @@ func tile_rect(x: int, y: int) -> Rect2:
 func terrain_at(t: Vector2i) -> String:
 	var tile: Dictionary = _terrain.get(t, {})
 	return str(tile.get("terrain", "grass"))
+
+
+func buildable_at(t: Vector2i) -> bool:
+	var def: Dictionary = _terrains.get(terrain_at(t), {})
+	return bool(def.get("buildable", true))
+
+
+func set_preview(def_id: String, tile: Vector2i, dir: int, player_id: String) -> void:
+	if def_id == _preview_def_id and tile == _preview_tile and dir == _preview_dir \
+			and player_id == _preview_player_id:
+		return
+	_preview_def_id = def_id
+	_preview_tile = tile
+	_preview_dir = dir
+	_preview_player_id = player_id
+	queue_redraw()
+
+
+func clear_preview() -> void:
+	if _preview_def_id == "":
+		return
+	_preview_def_id = ""
+	queue_redraw()
 
 
 func entity_at_tile(t: Vector2i) -> Dictionary:
@@ -148,6 +202,7 @@ func _visible_tile_bounds() -> Rect2i:
 func _draw() -> void:
 	_draw_terrain()
 	_draw_entities()
+	_draw_preview()
 
 
 # Base terrain is drawn first, then any resource deposit is layered on top so
@@ -191,15 +246,8 @@ func _draw_entities() -> void:
 	for e in _entities.values():
 		var def: Dictionary = _buildings.get(e.get("type", ""), {})
 		var pos := tile_center(e.get("x", 0), e.get("y", 0))
-		var color := Color.from_string(def.get("color", "#888888"), Color(0.55, 0.55, 0.55))
-		var rect := Rect2(pos - Vector2(_tile_size * 0.5, _tile_size * 0.5), Vector2(_tile_size, _tile_size))
-		var tex := _texture_for(def)
-		if tex != null:
-			draw_texture_rect(tex, rect, false)
-			draw_rect(rect.grow(-2.0), Color(0, 0, 0, 0.18), false, 1.0)
-		else:
-			draw_rect(rect, color)
-			draw_rect(rect.grow(-2.0), Color(0, 0, 0, 0.35), false, 1.0)
+		var dir := int(e.get("dir", DEFAULT_DIR))
+		_draw_entity_body(def, pos, dir)
 
 		var category: String = str(def.get("category", ""))
 		if category == "logistics":
@@ -224,38 +272,83 @@ func _draw_entities() -> void:
 				str(e.get("type", "")), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color.WHITE)
 
 
+func _draw_entity_body(def: Dictionary, pos: Vector2, dir: int, modulate := Color.WHITE) -> void:
+	var color := Color.from_string(def.get("color", "#888888"), Color(0.55, 0.55, 0.55))
+	var rect := Rect2(pos - Vector2(_tile_size * 0.5, _tile_size * 0.5), Vector2(_tile_size, _tile_size))
+	var tex := _texture_for(def)
+	if tex != null:
+		draw_set_transform(pos, _dir_angle(dir), Vector2.ONE)
+		draw_texture_rect(tex, Rect2(-Vector2(_tile_size * 0.5, _tile_size * 0.5), Vector2(_tile_size, _tile_size)), false, modulate)
+		draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
+		draw_rect(rect.grow(-2.0), Color(0, 0, 0, 0.18), false, 1.0)
+	else:
+		draw_rect(rect, color * modulate)
+		draw_rect(rect.grow(-2.0), Color(0, 0, 0, 0.35), false, 1.0)
+
+
+func _dir_angle(dir: int) -> float:
+	return float((dir - DEFAULT_DIR) % 4) * PI * 0.5
+
+
+func _draw_preview() -> void:
+	if _preview_def_id == "":
+		return
+	var def: Dictionary = _buildings.get(_preview_def_id, {})
+	if def.is_empty():
+		return
+	var rect := tile_rect(_preview_tile.x, _preview_tile.y)
+	var valid := _preview_valid(def)
+	var tint := Color(0.3, 0.9, 0.4, 0.35) if valid else Color(0.95, 0.35, 0.3, 0.4)
+	draw_rect(rect, tint)
+	draw_rect(rect.grow(-2.0), Color(0.6, 1.0, 0.7) if valid else Color(0.98, 0.4, 0.35), false, 1.5)
+	var pos := tile_center(_preview_tile.x, _preview_tile.y)
+	var ghost := Color(0.75, 1.0, 0.8, 0.5) if valid else Color(1.0, 0.6, 0.55, 0.5)
+	_draw_entity_body(def, pos, _preview_dir, ghost)
+	if str(def.get("category", "")) == "logistics":
+		_draw_logistics({"type": _preview_def_id, "dir": _preview_dir}, pos)
+
+
+func _preview_valid(def: Dictionary) -> bool:
+	if not entity_at_tile(_preview_tile).is_empty():
+		return false
+	if not buildable_at(_preview_tile):
+		return false
+	var player: Dictionary = _players.get(_preview_player_id, {})
+	var mats: Dictionary = player.get("resources", {})
+	for res in def.get("cost", {}):
+		if int(mats.get(res, 0)) < int(def["cost"][res]):
+			return false
+	return true
+
+
 func _draw_logistics(e: Dictionary, pos: Vector2) -> void:
-	var def: Dictionary = _buildings.get(e.get("type", ""), {})
 	var type_id: String = str(e.get("type", ""))
-	var r := _tile_size * 0.5
-	var inner := 0.34
 	if type_id == "hub":
-		draw_circle(pos, r * inner, Color(0.05, 0.25, 0.4, 0.9))
-		draw_circle(pos, r * inner, Color.WHITE, false, 1.5)
-		draw_string(ThemeDB.fallback_font, pos + Vector2(-4, 5), "H", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)
 		return
 
-	var dir: int = int(e.get("dir", 1))
-	var dir_vec := _dir_vector(dir)
-	var arrow_w := r * 0.5
-	var arrow_l := r * 0.45
-	var base := pos
-	var tip := pos + dir_vec * arrow_l
-	var normal := Vector2(-dir_vec.y, dir_vec.x)
-	draw_line(base, tip, Color(0.9, 0.95, 1.0, 0.9), 2.0)
-	draw_line(tip, tip - (dir_vec + normal) * arrow_w * 0.5, Color(0.9, 0.95, 1.0, 0.9), 2.0)
-	draw_line(tip, tip - (dir_vec - normal) * arrow_w * 0.5, Color(0.9, 0.95, 1.0, 0.9), 2.0)
-
 	var stock: Dictionary = e.get("stock", {})
-	var idx := 0
+	var items: Array = []
 	for res in stock:
-		var res_def: Dictionary = _resources.get(res, {})
-		var col := Color.from_string(str(res_def.get("color", "#888")), Color(0.6, 0.6, 0.6))
+		var rdef: Dictionary = _resources.get(res, {})
+		var col := Color.from_string(str(rdef.get("color", "#888")), Color(0.6, 0.6, 0.6))
 		for _i in range(int(stock[res])):
-			var angle := -PI * 0.5 + float(idx) * 0.7
-			var dot_pos := pos + Vector2(cos(angle), sin(angle)) * r * 0.28
-			draw_circle(dot_pos, 3.0, col)
-			idx += 1
+			items.append({"rdef": rdef, "col": col})
+	if items.is_empty():
+		return
+
+	var dir: int = int(e.get("dir", DEFAULT_DIR))
+	var dir_vec := _dir_vector(dir)
+	var count := items.size()
+	for i in range(count):
+		var base := float(i) / float(count)
+		var prog := fposmod(base + _anim, 1.0)
+		var item_pos := pos + dir_vec * (prog - 0.5) * float(_tile_size)
+		var tex := _texture_for(items[i]["rdef"])
+		var half := _tile_size * 0.25
+		if tex != null:
+			draw_texture_rect(tex, Rect2(item_pos - Vector2(half, half), Vector2(half * 2.0, half * 2.0)), false)
+		else:
+			draw_circle(item_pos, _tile_size * 0.16, items[i]["col"])
 
 
 func _dir_vector(dir: int) -> Vector2:

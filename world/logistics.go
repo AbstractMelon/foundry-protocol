@@ -1,15 +1,15 @@
 package world
 
-// Belt movements per tick. A belt holds a small buffer of items in its Stock
-// and pushes them toward the tile it faces. A hub absorbs any item it receives
-// and delivers it straight to its owner's inventory.
+// Belt movements per tick. Items slowly slide along belts as individual
+// tracked entities with a progress value that advances each tick.
 const (
 	DirNorth = 0
 	DirEast  = 1
 	DirSouth = 2
 	DirWest  = 3
 
-	MaxBeltBuffer = 5 // total items a single belt can hold in flight
+	MaxBeltBuffer = 5  // total items a single belt can hold in flight
+	BeltSpeed     = 8  // ticks for an item to travel one belt segment
 )
 
 func dirOffset(dir int) (dx, dy int) {
@@ -27,12 +27,19 @@ func dirOffset(dir int) (dx, dy int) {
 	}
 }
 
+func isBelt(e *Entity) bool {
+	return e != nil && e.Type == "belt"
+}
+
 func (w *World) neighborEntity(e *Entity) *Entity {
 	dx, dy := dirOffset(e.Dir)
 	return w.EntityAt(e.X+dx, e.Y+dy)
 }
 
 func itemCount(e *Entity) int {
+	if isBelt(e) {
+		return len(e.BeltItems)
+	}
 	total := 0
 	for _, qty := range e.Stock {
 		total += qty
@@ -53,6 +60,37 @@ func takeItem(e *Entity, res string) bool {
 
 func addItem(e *Entity, res string) {
 	e.Stock[res]++
+}
+
+func addBeltItem(e *Entity, res string) {
+	e.BeltItems = append(e.BeltItems, BeltItem{Res: res, Progress: 0})
+}
+
+func beltItemCount(e *Entity, res string) int {
+	count := 0
+	for _, item := range e.BeltItems {
+		if item.Res == res {
+			count++
+		}
+	}
+	return count
+}
+
+func removeBeltItems(e *Entity, res string, count int) {
+	removed := 0
+	newItems := make([]BeltItem, 0, len(e.BeltItems))
+	for _, item := range e.BeltItems {
+		if removed >= count {
+			newItems = append(newItems, item)
+			continue
+		}
+		if item.Res == res {
+			removed++
+		} else {
+			newItems = append(newItems, item)
+		}
+	}
+	e.BeltItems = newItems
 }
 
 // Reports how many of a resource a building can still hold in its internal
@@ -93,32 +131,30 @@ func (w *World) receiveInto(from *Entity, res string) bool {
 		return true
 	}
 
-	switch tdef.Category {
-	case "logistics":
-		// Another belt can accept up to its buffer limit.
+	if isBelt(target) {
 		if itemCount(target) >= MaxBeltBuffer {
 			return false
 		}
 		if !takeItem(from, res) {
 			return false
 		}
-		addItem(target, res)
-		w.markChanged(from)
-		w.markChanged(target)
-		return true
-	default:
-		// A production/other building accepts the item up to its storage cap.
-		if w.stockCap(target, res, tdef.Storage) <= 0 {
-			return false
-		}
-		if !takeItem(from, res) {
-			return false
-		}
-		addItem(target, res)
+		addBeltItem(target, res)
 		w.markChanged(from)
 		w.markChanged(target)
 		return true
 	}
+
+	// A production/other building accepts the item up to its storage cap.
+	if w.stockCap(target, res, tdef.Storage) <= 0 {
+		return false
+	}
+	if !takeItem(from, res) {
+		return false
+	}
+	addItem(target, res)
+	w.markChanged(from)
+	w.markChanged(target)
+	return true
 }
 
 // Credits a hub's owner with `res`, marking the player changed.
@@ -131,22 +167,65 @@ func (w *World) deliverToOwner(hub *Entity, res string) {
 	w.changedPlayers[hub.OwnerID] = true
 }
 
-// Advances every belt: one buffered item per tick moves one tile toward its
-// destination so belts form a flowing line rather than dumping whole buffers
-// at once.
+// Advances every belt: items slowly slide along the belt surface by
+// progressing their position each tick. When an item reaches the end
+// of a segment it is delivered to the neighboring entity.
 func (w *World) tickLogistics() {
 	for _, e := range w.entities {
-		tdef, ok := w.registry.Buildings[e.Type]
-		if !ok || tdef.Category != "logistics" {
+		if !isBelt(e) || len(e.BeltItems) == 0 {
 			continue
 		}
-		if e.Stock == nil || itemCount(e) == 0 {
-			continue
+
+		target := w.neighborEntity(e)
+		targetOk := target != nil
+		if targetOk {
+			_, targetOk = w.registry.Buildings[target.Type]
 		}
-		for res := range e.Stock {
-			if w.receiveInto(e, res) {
-				break
+
+		var completed []BeltItem
+		remaining := make([]BeltItem, 0, len(e.BeltItems))
+		for _, item := range e.BeltItems {
+			item.Progress += 1.0 / BeltSpeed
+			if item.Progress >= 1.0 {
+				completed = append(completed, item)
+			} else {
+				remaining = append(remaining, item)
 			}
+		}
+		e.BeltItems = remaining
+
+		if len(completed) == 0 {
+			continue
+		}
+
+		if target == nil || !targetOk {
+			e.BeltItems = append(e.BeltItems, completed...)
+			w.markChanged(e)
+			continue
+		}
+
+		if target.Type == "hub" {
+			for _, item := range completed {
+				w.deliverToOwner(target, item.Res)
+			}
+			w.markChanged(e)
+			w.markChanged(target)
+		} else if isBelt(target) {
+			for _, item := range completed {
+				if len(target.BeltItems) < MaxBeltBuffer {
+					target.BeltItems = append(target.BeltItems, BeltItem{Res: item.Res, Progress: 0})
+				} else {
+					e.BeltItems = append(e.BeltItems, BeltItem{Res: item.Res, Progress: 0})
+				}
+			}
+			w.markChanged(e)
+			w.markChanged(target)
+		} else {
+			for _, item := range completed {
+				addItem(target, item.Res)
+			}
+			w.markChanged(e)
+			w.markChanged(target)
 		}
 	}
 }

@@ -1,5 +1,10 @@
 package protocol
 
+type BeltItem struct {
+	Res      string  `json:"res"`
+	Progress float64 `json:"progress"`
+}
+
 type EntityView struct {
 	ID       int64          `json:"id"`
 	Type     string         `json:"type"`
@@ -10,6 +15,7 @@ type EntityView struct {
 	Progress int            `json:"progress"`
 	Dir      int            `json:"dir"`
 	Stock    map[string]int `json:"stock"`
+	BeltItems []BeltItem    `json:"belt_items,omitempty"`
 }
 
 type PlayerView struct {

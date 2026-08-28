@@ -2,6 +2,11 @@ package world
 
 import "foundryprotocol/protocol"
 
+type BeltItem struct {
+	Res      string
+	Progress float64
+}
+
 type Entity struct {
 	ID       int64
 	Type     string
@@ -12,9 +17,14 @@ type Entity struct {
 	Progress int
 	Dir      int
 	Stock    map[string]int
+	BeltItems []BeltItem
 }
 
 func (e *Entity) View() protocol.EntityView {
+	beltItems := make([]protocol.BeltItem, len(e.BeltItems))
+	for i, bi := range e.BeltItems {
+		beltItems[i] = protocol.BeltItem{Res: bi.Res, Progress: bi.Progress}
+	}
 	return protocol.EntityView{
 		ID:       e.ID,
 		Type:     e.Type,
@@ -25,5 +35,6 @@ func (e *Entity) View() protocol.EntityView {
 		Progress: e.Progress,
 		Dir:      e.Dir,
 		Stock:    e.Stock,
+		BeltItems: beltItems,
 	}
 }

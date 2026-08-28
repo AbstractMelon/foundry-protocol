@@ -2,7 +2,6 @@ extends Node2D
 
 const FALLBACK_TILE := 48
 const DEFAULT_DIR := 1
-const BELT_CROSS_SECONDS := 0.8
 
 var _tile_size := FALLBACK_TILE
 var _entities := {}
@@ -18,33 +17,9 @@ var _preview_tile := Vector2i.ZERO
 var _preview_dir := DEFAULT_DIR
 var _preview_player_id := ""
 
-var _anim := 0.0
-
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-
-
-func _process(delta: float) -> void:
-	if not _has_belt_items():
-		return
-	_anim = fposmod(_anim + delta / BELT_CROSS_SECONDS, 1.0)
-	queue_redraw()
-
-
-func _has_belt_items() -> bool:
-	for e in _entities.values():
-		var def: Dictionary = _buildings.get(e.get("type", ""), {})
-		if str(def.get("category", "")) != "logistics":
-			continue
-		if str(e.get("type", "")) == "hub":
-			continue
-		var total := 0
-		for qty in e.get("stock", {}):
-			total += int(qty)
-		if total > 0:
-			return true
-	return false
 
 
 func set_content(bundle: Dictionary) -> void:
@@ -322,33 +297,25 @@ func _preview_valid(def: Dictionary) -> bool:
 
 
 func _draw_logistics(e: Dictionary, pos: Vector2) -> void:
-	var type_id: String = str(e.get("type", ""))
-	if type_id == "hub":
-		return
-
-	var stock: Dictionary = e.get("stock", {})
-	var items: Array = []
-	for res in stock:
-		var rdef: Dictionary = _resources.get(res, {})
-		var col := Color.from_string(str(rdef.get("color", "#888")), Color(0.6, 0.6, 0.6))
-		for _i in range(int(stock[res])):
-			items.append({"rdef": rdef, "col": col})
-	if items.is_empty():
+	var belt_items: Array = e.get("belt_items", [])
+	if belt_items.is_empty():
 		return
 
 	var dir: int = int(e.get("dir", DEFAULT_DIR))
 	var dir_vec := _dir_vector(dir)
-	var count := items.size()
-	for i in range(count):
-		var base := float(i) / float(count)
-		var prog := fposmod(base + _anim, 1.0)
-		var item_pos := pos + dir_vec * (prog - 0.5) * float(_tile_size)
-		var tex := _texture_for(items[i]["rdef"])
-		var half := _tile_size * 0.25
+	var half := _tile_size * 0.25
+
+	for bi in belt_items:
+		var res := str(bi.get("res", ""))
+		var progress := float(bi.get("progress", 0.0))
+		var rdef: Dictionary = _resources.get(res, {})
+		var col := Color.from_string(str(rdef.get("color", "#888")), Color(0.6, 0.6, 0.6))
+		var item_pos := pos + dir_vec * (progress - 0.5) * float(_tile_size)
+		var tex := _texture_for(rdef)
 		if tex != null:
 			draw_texture_rect(tex, Rect2(item_pos - Vector2(half, half), Vector2(half * 2.0, half * 2.0)), false)
 		else:
-			draw_circle(item_pos, _tile_size * 0.16, items[i]["col"])
+			draw_circle(item_pos, _tile_size * 0.16, col)
 
 
 func _dir_vector(dir: int) -> Vector2:

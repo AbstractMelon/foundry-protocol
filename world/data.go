@@ -21,15 +21,21 @@ type PlayerData struct {
 }
 
 type EntityData struct {
-	ID       int64          `json:"id"`
-	Type     string         `json:"type"`
-	OwnerID  string         `json:"owner_id"`
-	X        int            `json:"x"`
-	Y        int            `json:"y"`
-	Health   int            `json:"health"`
-	Progress int            `json:"progress"`
-	Dir      int            `json:"dir"`
-	Stock    map[string]int `json:"stock"`
+	ID        int64          `json:"id"`
+	Type      string         `json:"type"`
+	OwnerID   string         `json:"owner_id"`
+	X         int            `json:"x"`
+	Y         int            `json:"y"`
+	Health    int            `json:"health"`
+	Progress  int            `json:"progress"`
+	Dir       int            `json:"dir"`
+	Stock     map[string]int `json:"stock"`
+	BeltItems []BeltItemData `json:"belt_items,omitempty"`
+}
+
+type BeltItemData struct {
+	Res      string  `json:"res"`
+	Progress float64 `json:"progress"`
 }
 
 type TileData struct {
@@ -56,6 +62,10 @@ func (w *World) ToData() WorldData {
 	}
 	for _, id := range sortedEntityIDs(w.entities) {
 		e := w.entities[id]
+		beltItems := make([]BeltItemData, len(e.BeltItems))
+		for i, bi := range e.BeltItems {
+			beltItems[i] = BeltItemData{Res: bi.Res, Progress: bi.Progress}
+		}
 		data.Entities = append(data.Entities, EntityData{
 			ID:       e.ID,
 			Type:     e.Type,
@@ -66,6 +76,7 @@ func (w *World) ToData() WorldData {
 			Progress: e.Progress,
 			Dir:      e.Dir,
 			Stock:    e.Stock,
+			BeltItems: beltItems,
 		})
 	}
 	for _, c := range sortedTileKeys(w.tiles) {
@@ -82,6 +93,10 @@ func (w *World) FromData(d *WorldData) {
 		w.players[pd.ID] = &Player{ID: pd.ID, Name: pd.Name, Resources: pd.Resources}
 	}
 	for _, ed := range d.Entities {
+		beltItems := make([]BeltItem, len(ed.BeltItems))
+		for i, bi := range ed.BeltItems {
+			beltItems[i] = BeltItem{Res: bi.Res, Progress: bi.Progress}
+		}
 		w.entities[ed.ID] = &Entity{
 			ID:       ed.ID,
 			Type:     ed.Type,
@@ -92,6 +107,7 @@ func (w *World) FromData(d *WorldData) {
 			Progress: ed.Progress,
 			Dir:      ed.Dir,
 			Stock:    ed.Stock,
+			BeltItems: beltItems,
 		}
 	}
 	w.tiles = make(map[Coord]Tile)

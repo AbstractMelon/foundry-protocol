@@ -35,6 +35,7 @@ func (w *World) tickProduction(e *Entity, storage map[string]int, rec content.Re
 		w.pullInputs(e, rec.Input)
 	}
 	e.Progress++
+	w.markChanged(e)
 	if e.Progress < rec.DurationTicks {
 		return
 	}
@@ -66,7 +67,13 @@ func (w *World) pullInputs(e *Entity, rec map[string]int) {
 		if missing <= 0 {
 			continue
 		}
-		srcHas := src.Stock[res]
+
+		var srcHas int
+		if isBelt(src) {
+			srcHas = beltItemCount(src, res)
+		} else {
+			srcHas = src.Stock[res]
+		}
 		if srcHas <= 0 {
 			continue
 		}
@@ -75,9 +82,14 @@ func (w *World) pullInputs(e *Entity, rec map[string]int) {
 			take = missing
 		}
 		e.Stock[res] += take
-		src.Stock[res] -= take
-		if src.Stock[res] == 0 {
-			delete(src.Stock, res)
+
+		if isBelt(src) {
+			removeBeltItems(src, res, take)
+		} else {
+			src.Stock[res] -= take
+			if src.Stock[res] <= 0 {
+				delete(src.Stock, res)
+			}
 		}
 		w.markChanged(e)
 		w.markChanged(src)
@@ -96,10 +108,14 @@ func (w *World) tickExtraction(e *Entity, storage map[string]int, rec content.Re
 	}
 	res := t.Deposit
 	if cap, ok := storage[res]; ok && e.Stock[res] >= cap {
-		e.Progress = 0
+		if e.Progress != 0 {
+			e.Progress = 0
+			w.markChanged(e)
+		}
 		return
 	}
 	e.Progress++
+	w.markChanged(e)
 	if e.Progress < rec.DurationTicks {
 		return
 	}

@@ -28,6 +28,8 @@ var _preview_dir := DEFAULT_DIR
 var _preview_flipped := false
 var _preview_player_id := ""
 
+var _show_grid := false
+
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -227,6 +229,11 @@ func _parse_textures(textures: Dictionary) -> void:
 			_textures[str(name)] = tex
 
 
+func set_show_grid(on: bool) -> void:
+	_show_grid = on
+	queue_redraw()
+
+
 func _texture_from_data_url(data_url: String) -> Texture2D:
 	var idx := data_url.find(",")
 	if idx < 0:
@@ -288,8 +295,9 @@ func _draw_terrain() -> void:
 				draw_texture_rect(tex, rect, false)
 			else:
 				draw_rect(rect, color)
-			draw_line(rect.position, rect.position + Vector2(rect.size.x, 0), grid_color, 1.0)
-			draw_line(rect.position, rect.position + Vector2(0, rect.size.y), grid_color, 1.0)
+			if _show_grid:
+				draw_line(rect.position, rect.position + Vector2(rect.size.x, 0), grid_color, 1.0)
+				draw_line(rect.position, rect.position + Vector2(0, rect.size.y), grid_color, 1.0)
 
 			var dep := str(tile.get("deposit", ""))
 			if dep != "":

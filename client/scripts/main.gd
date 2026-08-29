@@ -19,6 +19,7 @@ var _panning := false
 var _pan_origin := Vector2.ZERO
 var _cam_origin := Vector2.ZERO
 var _debug_visible := false
+var _show_grid := false
 
 var _drag_active := false
 var _drag_start_tile := Vector2i.ZERO
@@ -290,6 +291,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_F12:
 			_set_debug(not _debug_visible)
+		elif event.keycode == KEY_F11:
+			_show_grid = not _show_grid
+			layer.set_show_grid(_show_grid)
 		elif event.keycode == KEY_ENTER and not console.has_focus():
 			_show_console()
 		elif event.keycode == KEY_ESCAPE and console.has_focus():

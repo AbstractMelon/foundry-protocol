@@ -12,6 +12,7 @@ type World struct {
 	entities map[int64]*Entity
 	tick     int64
 	nextID   int64
+	nextItemID int64
 
 	size         int
 	tiles        map[Coord]Tile

@@ -30,7 +30,33 @@ func dirOffset(dir int) (dx, dy int) {
 }
 
 func isBelt(e *Entity) bool {
-	return e != nil && e.Type == "belt"
+	return e != nil && (e.Type == "belt" || e.Type == "belt_turn")
+}
+
+func isBeltTurn(e *Entity) bool {
+	return e != nil && e.Type == "belt_turn"
+}
+
+// beltTurnInputDir returns the absolute direction from which a corner belt
+// accepts items. The turn always pivots a quarter turn from its input side to
+// its output side (e.Dir); flipping mirrors the bend. For the unflipped sprite
+// (input West -> output South) the input is one step past the output, and for
+// the flipped sprite it is one step before.
+func beltTurnInputDir(e *Entity) int {
+	if e.Flipped {
+		return (e.Dir + 3) % 4
+	}
+	return (e.Dir + 1) % 4
+}
+
+// receivesFromInputSide reports whether `src` sits on the corner belt's input
+// side (i.e. items flowing out of `src` enter the bend the correct way).
+func cornerAcceptsFrom(src, corner *Entity) bool {
+	if !isBeltTurn(corner) {
+		return true
+	}
+	idx, idy := dirOffset(beltTurnInputDir(corner))
+	return src != nil && src.X == corner.X+idx && src.Y == corner.Y+idy
 }
 
 func (w *World) neighborEntity(e *Entity) *Entity {
@@ -64,8 +90,12 @@ func addItem(e *Entity, res string) {
 	e.Stock[res]++
 }
 
-func addBeltItem(e *Entity, res string) {
-	e.BeltItems = append(e.BeltItems, BeltItem{Res: res, Progress: 0})
+// addBeltItem places a freshly-inserted item onto a belt, assigning it a
+// stable, monotonically increasing ID so the client can track it across ticks
+// and across belt-to-belt transfers.
+func (w *World) addBeltItem(e *Entity, res string) {
+	w.nextItemID++
+	e.BeltItems = append(e.BeltItems, BeltItem{ID: w.nextItemID, Res: res, Progress: 0})
 }
 
 func beltItemCount(e *Entity, res string) int {
@@ -134,13 +164,16 @@ func (w *World) receiveInto(from *Entity, res string) bool {
 	}
 
 	if isBelt(target) {
+		if !cornerAcceptsFrom(from, target) {
+			return false
+		}
 		if itemCount(target) >= MaxBeltBuffer {
 			return false
 		}
 		if !takeItem(from, res) {
 			return false
 		}
-		addBeltItem(target, res)
+		w.addBeltItem(target, res)
 		w.markChanged(from)
 		w.markChanged(target)
 		return true
@@ -228,6 +261,11 @@ func (w *World) tickLogistics() {
 
 		if isBelt(target) {
 			for _, item := range completed {
+				if !cornerAcceptsFrom(e, target) {
+					item.Progress = 1.0
+					e.BeltItems = append(e.BeltItems, item)
+					continue
+				}
 				if len(target.BeltItems) >= MaxBeltBuffer {
 					item.Progress = 1.0
 					e.BeltItems = append(e.BeltItems, item)

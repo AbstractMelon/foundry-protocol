@@ -26,6 +26,7 @@ type Message struct {
 	TileX        int    `json:"tile_x,omitempty"`
 	TileY        int    `json:"tile_y,omitempty"`
 	Dir          int    `json:"dir,omitempty"`
+	Flipped      bool   `json:"flipped,omitempty"`
 	EntityID     int64  `json:"entity_id,omitempty"`
 	Text         string `json:"text,omitempty"`
 	Value        string `json:"value,omitempty"`

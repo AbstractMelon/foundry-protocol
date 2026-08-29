@@ -35,6 +35,14 @@ buildings:
     health: 60
     cost: { iron: 5 }
 
+  - id: belt_turn
+    name: Belt Turn
+    category: logistics
+    color: "#55606b"
+    texture: belt-90.png
+    health: 60
+    cost: { iron: 5 }
+
   - id: hub
     name: Hub
     category: logistics

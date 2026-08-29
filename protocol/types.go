@@ -1,6 +1,7 @@
 package protocol
 
 type BeltItem struct {
+	ID       int64   `json:"id"`
 	Res      string  `json:"res"`
 	Progress float64 `json:"progress"`
 }
@@ -14,6 +15,7 @@ type EntityView struct {
 	Health   int            `json:"health"`
 	Progress int            `json:"progress"`
 	Dir      int            `json:"dir"`
+	Flipped  bool           `json:"flipped"`
 	Stock    map[string]int `json:"stock"`
 	BeltItems []BeltItem    `json:"belt_items,omitempty"`
 }

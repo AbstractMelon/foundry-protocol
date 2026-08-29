@@ -20,6 +20,15 @@ var _pan_origin := Vector2.ZERO
 var _cam_origin := Vector2.ZERO
 var _debug_visible := false
 
+var _drag_active := false
+var _drag_start_tile := Vector2i.ZERO
+var _drag_started_on_belt := false
+var _drag_seed_dir := 1
+var _drag_seed_id := -1
+var _drag_axis_locked := false
+var _drag_axis := 0
+var _drag_placed := {}
+
 const PAN_SPEED := 420.0
 const PAN_SPEED_FAST := 1250.0
 const ZOOM_STEP := 1.12
@@ -67,6 +76,7 @@ func _process(delta: float) -> void:
 			camera.position += dir.normalized() * speed * delta
 
 	_frame += 1
+	_update_belt_drag()
 	_update_preview()
 	if _frame % 15 != 0:
 		return
@@ -101,6 +111,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and _panning:
 		camera.position = _cam_origin - (event.position - _pan_origin)
 		return
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+		if _drag_active:
+			_end_belt_drag()
+		return
 	if event is InputEventMouseButton and event.pressed and NetworkManager.is_connected_to_server():
 		var tile: Vector2i = layer.world_to_tile(get_global_mouse_position())
 		if event.button_index == MOUSE_BUTTON_RIGHT:
@@ -112,8 +126,156 @@ func _unhandled_input(event: InputEvent) -> void:
 				var e: Dictionary = layer.entity_at_tile(tile)
 				if not e.is_empty():
 					NetworkManager.remove(int(e.get("id", -1)))
+			elif _selected == "belt":
+				_start_belt_drag(tile)
 			elif _selected != "":
 				NetworkManager.place(_selected, tile.x, tile.y, _rotation)
+
+
+# Begins a belt drag from the tile under the cursor. If a belt already occupies
+# that tile its output direction is remembered so a perpendicular drag auto-adds
+# a corner to route around the bend.
+func _start_belt_drag(tile: Vector2i) -> void:
+	_drag_active = true
+	_drag_start_tile = tile
+	_drag_axis_locked = false
+	_drag_axis = 0
+	_drag_placed.clear()
+	var e: Dictionary = layer.entity_at_tile(tile)
+	if not e.is_empty() and (str(e.get("type", "")) == "belt" or str(e.get("type", "")) == "belt_turn"):
+		_drag_started_on_belt = true
+		_drag_seed_dir = int(e.get("dir", 1))
+		_drag_seed_id = int(e.get("id", -1))
+	else:
+		_drag_started_on_belt = false
+		_drag_seed_dir = 1
+		_drag_seed_id = -1
+
+
+# Ends the active belt drag. A press without any movement is a plain click, so
+# it still drops a single belt (unless it landed on an existing belt).
+func _end_belt_drag() -> void:
+	if not _drag_active:
+		return
+	_drag_active = false
+	if not _drag_axis_locked and not _drag_started_on_belt:
+		NetworkManager.place("belt", _drag_start_tile.x, _drag_start_tile.y, _rotation)
+	_drag_axis_locked = false
+	_drag_started_on_belt = false
+	_drag_seed_dir = 1
+	_drag_seed_id = -1
+	_drag_placed.clear()
+
+
+# Computes the straight (and, when started on a belt, corner) placement for the
+# current drag and sends place orders for any tiles not yet placed this drag.
+func _update_belt_drag() -> void:
+	if not _drag_active:
+		return
+	var cur: Vector2i = layer.world_to_tile(get_global_mouse_position())
+	var d := cur - _drag_start_tile
+
+	if _drag_started_on_belt:
+		_update_belt_drag_from_belt(d, cur)
+		return
+
+	# Plain straight line: lock the dominant axis once so it lays cleanly.
+	if not _drag_axis_locked and d != Vector2i.ZERO:
+		_drag_axis_locked = true
+		_drag_axis = 0 if absi(d.x) >= absi(d.y) else 1
+	if not _drag_axis_locked:
+		return
+	var drag_dir: int
+	if _drag_axis == 0:
+		drag_dir = 1 if (cur.x - _drag_start_tile.x) > 0 else 3
+	else:
+		drag_dir = 2 if (cur.y - _drag_start_tile.y) > 0 else 0
+	var straight: Array = []
+	_append_run(straight, _drag_start_tile, drag_dir, cur)
+	_place(straight)
+
+
+# When the drag started on an existing belt, follow the cursor's direction each
+# frame: if it travels mostly along the belt it continues straight out its end,
+# otherwise it turns, with the corner replacing the belt we started on.
+func _update_belt_drag_from_belt(d: Vector2i, cur: Vector2i) -> void:
+	if d == Vector2i.ZERO:
+		return
+	var horizontal := _horizontal(_drag_seed_dir)
+	var along := absi(d.x) if horizontal else absi(d.y)
+	var perp := absi(d.y) if horizontal else absi(d.x)
+	if along > 0 and along >= perp:
+		# Continue straight out the seed belt's end.
+		var straight: Array = []
+		_append_run(straight, _drag_start_tile + _dir_offset(_drag_seed_dir), _drag_seed_dir, cur)
+		_place(straight)
+		return
+
+	# Turn perpendicular: the corner takes the place of the belt we started on,
+	# accepting from the same side the original belt did.
+	var in_dir := (_drag_seed_dir + 2) % 4
+	var ddir := _perp_dir(_drag_seed_dir, d)
+	var flipped := ((ddir + 3) % 4) == in_dir
+	var key := _drag_start_tile
+	if not _drag_placed.has(key):
+		_drag_placed[key] = true
+		if _drag_seed_id >= 0:
+			NetworkManager.remove(_drag_seed_id)
+		NetworkManager.place("belt_turn", key.x, key.y, ddir, flipped)
+	var run: Array = []
+	_append_run(run, _drag_start_tile + _dir_offset(ddir), ddir, cur)
+	_place(run)
+
+
+# Sends a place order for every placement not already sent during this drag.
+func _place(placements: Array) -> void:
+	for p in placements:
+		var key: Vector2i = p["tile"]
+		if _drag_placed.has(key):
+			continue
+		_drag_placed[key] = true
+		NetworkManager.place(p["type"], key.x, key.y, p["dir"], p.get("flipped", false))
+
+
+# Appends `count` straight belt placements starting at `from` and stepping in
+# `dir`, extending at least until the line of tiles reaches `cur`.
+func _append_run(placements: Array, from: Vector2i, dir: int, cur: Vector2i) -> void:
+	var off := _dir_offset(dir)
+	var fc := _coord(dir, from)
+	var cc := _coord(dir, cur)
+	var count := maxi(1, absi(cc - fc))
+	var t := from
+	for i in count:
+		placements.append({"tile": t, "type": "belt", "dir": dir})
+		t += off
+
+
+func _dir_offset(dir: int) -> Vector2i:
+	match dir:
+		0:
+			return Vector2i(0, -1)
+		1:
+			return Vector2i(1, 0)
+		2:
+			return Vector2i(0, 1)
+		_:
+			return Vector2i(-1, 0)
+
+
+func _coord(dir: int, t: Vector2i) -> int:
+	return t.x if _horizontal(dir) else t.y
+
+
+func _horizontal(dir: int) -> bool:
+	return dir == 1 or dir == 3
+
+
+# The perpendicular direction to seed_dir that the drag vector heads toward.
+func _perp_dir(seed_dir: int, d: Vector2i) -> int:
+	if _horizontal(seed_dir):
+		return 2 if d.y > 0 else 0
+	else:
+		return 1 if d.x > 0 else 3
 
 
 func _update_preview() -> void:

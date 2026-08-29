@@ -121,8 +121,8 @@ func send_hello(name: String) -> void:
 	send_message({"type": "hello", "name": name})
 
 
-func place(building_type: String, x: int, y: int, dir := 1) -> void:
-	send_message({"type": "place_building", "building_type": building_type, "tile_x": x, "tile_y": y, "dir": dir})
+func place(building_type: String, x: int, y: int, dir := 1, flipped := false) -> void:
+	send_message({"type": "place_building", "building_type": building_type, "tile_x": x, "tile_y": y, "dir": dir, "flipped": flipped})
 
 
 func remove(entity_id: int) -> void:

@@ -33,6 +33,14 @@ func hashSeed(s string) uint64 {
 	return h.Sum64()
 }
 
+// btoi converts a bool into an int for passing through variadic params.
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 type Server struct {
 	cfg        Config
 	reg        *content.Registry
@@ -259,7 +267,7 @@ func (s *Server) applyMessage(sess *Session, msg protocol.Message) {
 		s.handleHello(sess, msg)
 	case protocol.TypePlaceBuilding:
 		s.logger.Info().Str("player", sess.playerID).Str("type", msg.BuildingType).Int("x", msg.TileX).Int("y", msg.TileY).Msg("place_building received")
-		if err := s.world.PlaceBuilding(sess.playerID, msg.BuildingType, msg.TileX, msg.TileY, msg.Dir); err != nil {
+		if err := s.world.PlaceBuilding(sess.playerID, msg.BuildingType, msg.TileX, msg.TileY, msg.Dir, btoi(msg.Flipped)); err != nil {
 			s.logger.Info().Err(err).Msg("place_building rejected")
 			sess.enqueue(protocol.Message{Type: protocol.TypeSystem, Value: "error", Text: err.Error()})
 		} else {

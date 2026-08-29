@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://b3ggv2c3t8qif" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" uid="uid://dl3qgoxeiaw82" path="res://scripts/entity_layer.gd" id="2_layer"]
-[ext_resource type="AudioStream" uid="uid://5pyt52sqdnsb" path="res://music/FullyAutomated.mp3" id="3_sugp2"]
+[ext_resource type="AudioStream" uid="uid://cpbp7finbk1kp" path="res://music/TheSystemExpands.mp3" id="3_sugp2"]
 
 [node name="Main" type="Node2D" unique_id=877070783]
 script = ExtResource("1_main")
@@ -58,6 +58,7 @@ mouse_filter = 2
 alignment = 1
 
 [node name="ConsoleHint" type="Label" parent="UI/Root" unique_id=250225924]
+visible = false
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0

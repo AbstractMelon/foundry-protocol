@@ -1,5 +1,7 @@
 package world
 
+import "sort"
+
 // Belt movements per tick. Items slowly slide along belts as individual
 // tracked entities with a progress value that advances each tick.
 const (
@@ -8,8 +10,8 @@ const (
 	DirSouth = 2
 	DirWest  = 3
 
-	MaxBeltBuffer = 5  // total items a single belt can hold in flight
-	BeltSpeed     = 8  // ticks for an item to travel one belt segment
+	MaxBeltBuffer = 5 // total items a single belt can hold in flight
+	BeltSpeed     = 8 // ticks for an item to travel one belt segment
 )
 
 func dirOffset(dir int) (dx, dy int) {
@@ -168,11 +170,37 @@ func (w *World) deliverToOwner(hub *Entity, res string) {
 }
 
 // Advances every belt: items slowly slide along the belt surface by
-// progressing their position each tick. When an item reaches the end
-// of a segment it is delivered to the neighboring entity.
+// progressing their position each tick. When an item reaches the end of a
+// segment it is delivered to the neighboring entity, keeping the leftover
+// fractional progress so movement stays continuous across belt seams.
 func (w *World) tickLogistics() {
 	for _, e := range w.entities {
 		if !isBelt(e) || len(e.BeltItems) == 0 {
+			continue
+		}
+
+		step := 1.0 / BeltSpeed
+		var completed []BeltItem
+		remaining := make([]BeltItem, 0, len(e.BeltItems))
+		for _, item := range e.BeltItems {
+			item.Progress += step
+			if item.Progress >= 1.0 {
+				completed = append(completed, item)
+			} else {
+				remaining = append(remaining, item)
+			}
+		}
+
+		// Hand further-along items off first so that when several finish in
+		// the same tick they stay ordered on the receiving belt.
+		sort.Slice(completed, func(i, j int) bool {
+			return completed[i].Progress > completed[j].Progress
+		})
+
+		e.BeltItems = remaining
+		w.markChanged(e)
+
+		if len(completed) == 0 {
 			continue
 		}
 
@@ -182,25 +210,11 @@ func (w *World) tickLogistics() {
 			_, targetOk = w.registry.Buildings[target.Type]
 		}
 
-		var completed []BeltItem
-		remaining := make([]BeltItem, 0, len(e.BeltItems))
-		for _, item := range e.BeltItems {
-			item.Progress += 1.0 / BeltSpeed
-			if item.Progress >= 1.0 {
-				completed = append(completed, item)
-			} else {
-				remaining = append(remaining, item)
-			}
-		}
-		e.BeltItems = remaining
-
-		if len(completed) == 0 {
-			continue
-		}
-
 		if target == nil || !targetOk {
-			e.BeltItems = append(e.BeltItems, completed...)
-			w.markChanged(e)
+			for i := range completed {
+				completed[i].Progress = 1.0
+				e.BeltItems = append(e.BeltItems, completed[i])
+			}
 			continue
 		}
 
@@ -208,24 +222,27 @@ func (w *World) tickLogistics() {
 			for _, item := range completed {
 				w.deliverToOwner(target, item.Res)
 			}
-			w.markChanged(e)
 			w.markChanged(target)
-		} else if isBelt(target) {
-			for _, item := range completed {
-				if len(target.BeltItems) < MaxBeltBuffer {
-					target.BeltItems = append(target.BeltItems, BeltItem{Res: item.Res, Progress: 0})
-				} else {
-					e.BeltItems = append(e.BeltItems, BeltItem{Res: item.Res, Progress: 0})
-				}
-			}
-			w.markChanged(e)
-			w.markChanged(target)
-		} else {
-			for _, item := range completed {
-				addItem(target, item.Res)
-			}
-			w.markChanged(e)
-			w.markChanged(target)
+			continue
 		}
+
+		if isBelt(target) {
+			for _, item := range completed {
+				if len(target.BeltItems) >= MaxBeltBuffer {
+					item.Progress = 1.0
+					e.BeltItems = append(e.BeltItems, item)
+					continue
+				}
+				item.Progress -= 1.0
+				target.BeltItems = append(target.BeltItems, item)
+			}
+			w.markChanged(target)
+			continue
+		}
+
+		for _, item := range completed {
+			addItem(target, item.Res)
+		}
+		w.markChanged(target)
 	}
 }

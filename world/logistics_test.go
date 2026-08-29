@@ -1,6 +1,7 @@
 package world
 
 import (
+	"math"
 	"testing"
 
 	"foundryprotocol/content"
@@ -99,5 +100,88 @@ func (w *World) placeDir(t *testing.T, playerID, typ string, x, y, dir int) {
 			e.Dir = dir
 			break
 		}
+	}
+}
+
+func TestBeltBroadcastsProgressEveryTick(t *testing.T) {
+	reg := loadRegistry(t)
+	w := New(reg)
+	p := w.AddPlayer("p1", "Dev")
+	for _, id := range reg.ResourceIDs() {
+		p.Resources[id] = 1000
+	}
+	w.placeDir(t, p.ID, "belt", 0, 0, DirEast)
+	belt := w.EntityAt(0, 0)
+	belt.BeltItems = []BeltItem{{Res: "copper", Progress: 0.0}}
+	w.TakeChanges()
+
+	w.Tick()
+	if got := belt.BeltItems[0].Progress; got <= 0.0 || got >= 1.0 {
+		t.Fatalf("mid-belt item should advance every tick, got progress %v", got)
+	}
+	ch := w.TakeChanges()
+	found := false
+	for _, e := range ch.EntitiesChanged {
+		if e.ID == belt.ID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("belt that moved items without a completion was not broadcast")
+	}
+}
+
+func TestBeltCarriesProgressAcrossSegments(t *testing.T) {
+	reg := loadRegistry(t)
+	w := New(reg)
+	p := w.AddPlayer("p1", "Dev")
+	for _, id := range reg.ResourceIDs() {
+		p.Resources[id] = 1000
+	}
+	w.placeDir(t, p.ID, "belt", 0, 0, DirEast)
+	w.placeDir(t, p.ID, "belt", 1, 0, DirEast)
+	a := w.EntityAt(0, 0)
+	b := w.EntityAt(1, 0)
+	// An item almost finished with segment a keeps its leftover progress when
+	// it slides onto segment b instead of snapping back to the start.
+	a.BeltItems = []BeltItem{{Res: "copper", Progress: 0.9}}
+	w.TakeChanges()
+
+	w.Tick()
+	if len(a.BeltItems) != 0 || len(b.BeltItems) != 1 {
+		t.Fatalf("expected transfer to next belt, a=%v b=%v", a.BeltItems, b.BeltItems)
+	}
+	// The leftover progress (0.025) must survive the seam. Whether the
+	// receiving belt also advanced it this same tick depends on entity
+	// iteration order, so accept either.
+	got := b.BeltItems[0].Progress
+	if !(math.Abs(got-0.025) < 1e-9 || math.Abs(got-0.15) < 1e-9) {
+		t.Fatalf("item should carry its leftover progress past the seam, got %v (want ~0.025 or ~0.15)", got)
+	}
+}
+
+func TestBeltHoldsItemAtExitWhenBackedUp(t *testing.T) {
+	reg := loadRegistry(t)
+	w := New(reg)
+	p := w.AddPlayer("p1", "Dev")
+	for _, id := range reg.ResourceIDs() {
+		p.Resources[id] = 1000
+	}
+	w.placeDir(t, p.ID, "belt", 0, 0, DirEast)
+	w.placeDir(t, p.ID, "belt", 1, 0, DirEast)
+	a := w.EntityAt(0, 0)
+	b := w.EntityAt(1, 0)
+	for i := 0; i < MaxBeltBuffer; i++ {
+		b.BeltItems = append(b.BeltItems, BeltItem{Res: "copper", Progress: 0.5})
+	}
+	a.BeltItems = []BeltItem{{Res: "copper", Progress: 0.9}}
+	w.TakeChanges()
+
+	w.Tick()
+	if len(a.BeltItems) != 1 {
+		t.Fatalf("backed-up item should stay on the source belt, got %d items", len(a.BeltItems))
+	}
+	if got := a.BeltItems[0].Progress; got < 0.99 {
+		t.Fatalf("backed-up item should wait at the belt exit, got progress %v", got)
 	}
 }

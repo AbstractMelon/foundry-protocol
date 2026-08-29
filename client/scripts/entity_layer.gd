@@ -2,6 +2,8 @@ extends Node2D
 
 const FALLBACK_TILE := 48
 const DEFAULT_DIR := 1
+const DEFAULT_INTERVAL_MS := 100
+const BELT_STEP := 1.0 / 8.0
 
 var _tile_size := FALLBACK_TILE
 var _entities := {}
@@ -11,6 +13,11 @@ var _terrains := {}
 var _terrain := {}
 var _players := {}
 var _textures := {}
+
+var _prev_entities := {}
+var _last_update_ms := 0
+var _interval_ms := 0
+var _has_moving_belts := false
 
 var _preview_def_id := ""
 var _preview_tile := Vector2i.ZERO
@@ -39,6 +46,7 @@ func set_content(bundle: Dictionary) -> void:
 
 func apply_snapshot(snap: Dictionary) -> void:
 	_tile_size = int(snap.get("tile_size", _tile_size))
+	_prev_entities.clear()
 	_entities.clear()
 	_players.clear()
 	_terrain.clear()
@@ -48,10 +56,20 @@ func apply_snapshot(snap: Dictionary) -> void:
 		_players[p.get("id", "")] = p
 	for t in snap.get("tiles", []):
 		_terrain[Vector2i(int(t.get("x", 0)), int(t.get("y", 0)))] = t
+	_last_update_ms = 0
+	_interval_ms = 0
+	_refresh_moving_belts()
 	queue_redraw()
 
 
 func apply_diff(diff: Dictionary) -> void:
+	_prev_entities = _entities.duplicate()
+	var now_ms := Time.get_ticks_msec()
+	if _last_update_ms > 0:
+		_interval_ms = clampi(int(now_ms - _last_update_ms), 1, 500)
+	else:
+		_interval_ms = DEFAULT_INTERVAL_MS
+	_last_update_ms = now_ms
 	for e in diff.get("entities_added", []):
 		_entities[int(e.get("id", -1))] = e
 	for e in diff.get("entities_changed", []):
@@ -62,7 +80,28 @@ func apply_diff(diff: Dictionary) -> void:
 		_players[p.get("id", "")] = p
 	for t in diff.get("tiles_changed", []):
 		_terrain[Vector2i(int(t.get("x", 0)), int(t.get("y", 0)))] = t
+	_refresh_moving_belts()
 	queue_redraw()
+
+
+func _process(_delta: float) -> void:
+	if not _has_moving_belts:
+		return
+	if _interval_ms <= 0:
+		return
+	if Time.get_ticks_msec() - _last_update_ms >= _interval_ms:
+		return
+	queue_redraw()
+
+
+func _refresh_moving_belts() -> void:
+	_has_moving_belts = false
+	for e in _entities.values():
+		var def: Dictionary = _buildings.get(e.get("type", ""), {})
+		var items: Array = e.get("belt_items", [])
+		if str(def.get("category", "")) == "logistics" and not items.is_empty():
+			_has_moving_belts = true
+			return
 
 
 func world_to_tile(v: Vector2) -> Vector2i:
@@ -305,9 +344,24 @@ func _draw_logistics(e: Dictionary, pos: Vector2) -> void:
 	var dir_vec := _dir_vector(dir)
 	var half := _tile_size * 0.25
 
-	for bi in belt_items:
+	var prev_items: Array = []
+	var prev: Dictionary = _prev_entities.get(int(e.get("id", -1)), {})
+	if not prev.is_empty():
+		prev_items = prev.get("belt_items", [])
+
+	for i in belt_items.size():
+		var bi: Dictionary = belt_items[i]
 		var res := str(bi.get("res", ""))
 		var progress := float(bi.get("progress", 0.0))
+		var prev_progress := progress
+		if _interval_ms > 0:
+			if i < prev_items.size():
+				prev_progress = float(prev_items[i].get("progress", progress))
+			else:
+				prev_progress = progress - BELT_STEP
+			var alpha := clampf(float(Time.get_ticks_msec() - _last_update_ms) / float(_interval_ms), 0.0, 1.0)
+			progress = lerpf(prev_progress, progress, alpha)
+
 		var rdef: Dictionary = _resources.get(res, {})
 		var col := Color.from_string(str(rdef.get("color", "#888")), Color(0.6, 0.6, 0.6))
 		var item_pos := pos + dir_vec * (progress - 0.5) * float(_tile_size)

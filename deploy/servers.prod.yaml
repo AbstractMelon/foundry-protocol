@@ -1,0 +1,9 @@
+servers:
+  - id: main
+    name: Main World
+    description: "Official 24/7 foundry world"
+    # Public WebSocket URL clients will connect to. Must match the domain your
+    # reverse proxy terminates TLS on and forwards to 127.0.0.1:63566.
+    ws_url: "wss://world.example.com/ws"
+    owner: you
+    max_players: 16

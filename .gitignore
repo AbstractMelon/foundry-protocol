@@ -19,3 +19,7 @@ mono_crash.*.json
 saves/
 tmp/
 *.test
+
+# Build & deploy artifacts
+bin/
+run/

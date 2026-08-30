@@ -1,0 +1,3 @@
+addr: ":4283"
+servers_file: "deploy/servers.prod.yaml"
+api_key: ""

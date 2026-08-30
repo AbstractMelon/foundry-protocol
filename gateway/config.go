@@ -7,6 +7,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// apiKeyEnvVar overrides the YAML api_key when set, so the key never has to
+// live in a tracked file in production.
+const apiKeyEnvVar = "FOUNDRY_GATEWAY_API_KEY"
+
 type Config struct {
 	Addr        string `yaml:"addr"`
 	ServersFile string `yaml:"servers_file"`
@@ -27,6 +31,9 @@ func LoadConfig(path string) (Config, error) {
 	}
 	if cfg.ServersFile == "" {
 		cfg.ServersFile = "gateway/servers.yaml"
+	}
+	if v := os.Getenv(apiKeyEnvVar); v != "" {
+		cfg.APIKey = v
 	}
 	return cfg, nil
 }

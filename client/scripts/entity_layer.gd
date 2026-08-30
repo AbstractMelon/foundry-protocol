@@ -28,6 +28,12 @@ var _preview_dir := DEFAULT_DIR
 var _preview_flipped := false
 var _preview_player_id := ""
 
+# Staged placements shown while a belt drag is in progress. Keyed by tile, each
+# value is a placement dict {type, dir, flipped}. Nothing is placed on the
+# server until the drag is released.
+var _drag_layout := {}
+var _drag_removes := {}
+
 var _show_grid := false
 
 
@@ -197,6 +203,36 @@ func clear_preview() -> void:
 	queue_redraw()
 
 
+func set_drag_preview(layout: Dictionary, removes: Dictionary) -> void:
+	_drag_layout = layout
+	_drag_removes = removes
+	queue_redraw()
+
+
+func clear_drag_preview() -> void:
+	if _drag_layout.is_empty() and _drag_removes.is_empty():
+		return
+	_drag_layout.clear()
+	_drag_removes.clear()
+	queue_redraw()
+
+
+func _draw_drag_preview() -> void:
+	if _drag_layout.is_empty():
+		return
+	var ghost := Color(0.75, 1.0, 0.8, 0.55)
+	for key in _drag_layout:
+		var p: Dictionary = _drag_layout[key]
+		var t: Vector2i = key
+		var def: Dictionary = _buildings.get(p.get("type", ""), {})
+		if def.is_empty():
+			continue
+		var pos := tile_center(t.x, t.y)
+		_draw_entity_body(def, pos, int(p.get("dir", DEFAULT_DIR)), ghost, bool(p.get("flipped", false)))
+		if str(def.get("category", "")) == "logistics":
+			_draw_logistics({"type": p.get("type", ""), "dir": p.get("dir", DEFAULT_DIR), "flipped": p.get("flipped", false)}, pos)
+
+
 func entity_at_tile(t: Vector2i) -> Dictionary:
 	for e in _entities.values():
 		if e.get("x", 0) == t.x and e.get("y", 0) == t.y:
@@ -275,13 +311,14 @@ func _draw() -> void:
 	_draw_terrain()
 	_draw_entities()
 	_draw_preview()
+	_draw_drag_preview()
 
 
 # Base terrain is drawn first, then any resource deposit is layered on top so
 # ore reads as a transparent overlay on whatever block sits beneath it.
 func _draw_terrain() -> void:
 	var bounds := _visible_tile_bounds()
-	var grid_color := Color(1, 1, 1, 0.06)
+	var grid_color := Color(1, 1, 1, 0.15)
 	for x in range(bounds.position.x, bounds.position.x + bounds.size.x + 1):
 		for y in range(bounds.position.y, bounds.position.y + bounds.size.y + 1):
 			var t := Vector2i(x, y)
@@ -419,11 +456,20 @@ func _draw_preview() -> void:
 	if def.is_empty():
 		return
 	var rect := tile_rect(_preview_tile.x, _preview_tile.y)
-	var valid := _preview_valid(def)
+	var pos := tile_center(_preview_tile.x, _preview_tile.y)
+
+	# Holding a belt over an existing belt shows the green highlight but skips
+	# drawing the belt ghost texture over the existing belt, since dragging from
+	# there will turn it into a corner.
+	var over_existing_belt := _preview_def_id == "belt" and not entity_at_tile(_preview_tile).is_empty()
+
+	var valid := _preview_valid(def) or over_existing_belt
+
 	var tint := Color(0.3, 0.9, 0.4, 0.35) if valid else Color(0.95, 0.35, 0.3, 0.4)
 	draw_rect(rect, tint)
 	draw_rect(rect.grow(-2.0), Color(0.6, 1.0, 0.7) if valid else Color(0.98, 0.4, 0.35), false, 1.5)
-	var pos := tile_center(_preview_tile.x, _preview_tile.y)
+	if over_existing_belt:
+		return
 	var ghost := Color(0.75, 1.0, 0.8, 0.5) if valid else Color(1.0, 0.6, 0.55, 0.5)
 	_draw_entity_body(def, pos, _preview_dir, ghost, _preview_flipped)
 	if str(def.get("category", "")) == "logistics":

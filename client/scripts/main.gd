@@ -2,6 +2,7 @@ extends Node2D
 
 @onready var layer: Node2D = $EntityLayer
 @onready var camera: Camera2D = $Camera2D
+@onready var ui_root: Control = $UI/Root
 @onready var hud_label: Label = $UI/Root/HUD
 @onready var materials_label: Label = $UI/Root/Materials
 @onready var chat_log: Label = $UI/Root/ChatLog
@@ -20,6 +21,7 @@ var _pan_origin := Vector2.ZERO
 var _cam_origin := Vector2.ZERO
 var _debug_visible := false
 var _show_grid := false
+var _ui_visible := true
 
 var _drag_active := false
 var _drag_start_tile := Vector2i.ZERO
@@ -29,6 +31,7 @@ var _drag_seed_id := -1
 var _drag_axis_locked := false
 var _drag_axis := 0
 var _drag_placed := {}
+var _drag_removes := {}
 
 const PAN_SPEED := 420.0
 const PAN_SPEED_FAST := 1250.0
@@ -142,6 +145,7 @@ func _start_belt_drag(tile: Vector2i) -> void:
 	_drag_axis_locked = false
 	_drag_axis = 0
 	_drag_placed.clear()
+	_drag_removes.clear()
 	var e: Dictionary = layer.entity_at_tile(tile)
 	if not e.is_empty() and (str(e.get("type", "")) == "belt" or str(e.get("type", "")) == "belt_turn"):
 		_drag_started_on_belt = true
@@ -153,98 +157,114 @@ func _start_belt_drag(tile: Vector2i) -> void:
 		_drag_seed_id = -1
 
 
-# Ends the active belt drag. A press without any movement is a plain click, so
-# it still drops a single belt (unless it landed on an existing belt).
+# Ends the active belt drag and commits the staged layout to the server. A
+# press without any movement is a plain click, so it still drops a single belt
+# (unless it landed on an existing belt).
 func _end_belt_drag() -> void:
 	if not _drag_active:
 		return
 	_drag_active = false
 	if not _drag_axis_locked and not _drag_started_on_belt:
 		NetworkManager.place("belt", _drag_start_tile.x, _drag_start_tile.y, _rotation)
+	else:
+		_commit_layout()
 	_drag_axis_locked = false
 	_drag_started_on_belt = false
 	_drag_seed_dir = 1
 	_drag_seed_id = -1
 	_drag_placed.clear()
+	_drag_removes.clear()
+	layer.clear_drag_preview()
 
 
-# Computes the straight (and, when started on a belt, corner) placement for the
-# current drag and sends place orders for any tiles not yet placed this drag.
+# Sends every staged placement (and removal) from the finished drag to the
+# server all at once.
+func _commit_layout() -> void:
+	for key in _drag_removes:
+		NetworkManager.remove(_drag_removes[key])
+	for key in _drag_placed:
+		var p: Dictionary = _drag_placed[key]
+		NetworkManager.place(p.get("type", "belt"), key.x, key.y, p.get("dir", 1), p.get("flipped", false))
+
+
+# Recomputes the planned layout for the current drag cursor position and shows
+# it as a transparent preview. Nothing is sent to the server yet.
 func _update_belt_drag() -> void:
 	if not _drag_active:
 		return
+	var layout := _compute_layout()
+	_apply_layout(layout)
+
+
+func _compute_layout() -> Dictionary:
 	var cur: Vector2i = layer.world_to_tile(get_global_mouse_position())
 	var d := cur - _drag_start_tile
-
+	var placements: Array = []
+	var removes: Array = []
 	if _drag_started_on_belt:
-		_update_belt_drag_from_belt(d, cur)
-		return
+		return _compute_layout_from_belt(d, cur, placements, removes)
 
 	# Plain straight line: lock the dominant axis once so it lays cleanly.
 	if not _drag_axis_locked and d != Vector2i.ZERO:
 		_drag_axis_locked = true
 		_drag_axis = 0 if absi(d.x) >= absi(d.y) else 1
 	if not _drag_axis_locked:
-		return
+		return {"placements": [], "removes": []}
 	var drag_dir: int
 	if _drag_axis == 0:
 		drag_dir = 1 if (cur.x - _drag_start_tile.x) > 0 else 3
 	else:
 		drag_dir = 2 if (cur.y - _drag_start_tile.y) > 0 else 0
-	var straight: Array = []
-	_append_run(straight, _drag_start_tile, drag_dir, cur)
-	_place(straight)
+	_append_run(placements, _drag_start_tile, drag_dir, cur)
+	return {"placements": placements, "removes": removes}
 
 
 # When the drag started on an existing belt, follow the cursor's direction each
 # frame: if it travels mostly along the belt it continues straight out its end,
 # otherwise it turns, with the corner replacing the belt we started on.
-func _update_belt_drag_from_belt(d: Vector2i, cur: Vector2i) -> void:
+func _compute_layout_from_belt(d: Vector2i, cur: Vector2i, placements: Array, removes: Array) -> Dictionary:
 	if d == Vector2i.ZERO:
-		return
+		return {"placements": [], "removes": []}
 	var horizontal := _horizontal(_drag_seed_dir)
 	var along := absi(d.x) if horizontal else absi(d.y)
 	var perp := absi(d.y) if horizontal else absi(d.x)
 	if along > 0 and along >= perp:
 		# Continue straight out the seed belt's end.
-		var straight: Array = []
-		_append_run(straight, _drag_start_tile + _dir_offset(_drag_seed_dir), _drag_seed_dir, cur)
-		_place(straight)
-		return
+		_append_run(placements, _drag_start_tile + _dir_offset(_drag_seed_dir), _drag_seed_dir, cur)
+		return {"placements": placements, "removes": []}
 
 	# Turn perpendicular: the corner takes the place of the belt we started on,
 	# accepting from the same side the original belt did.
+	if _drag_seed_id >= 0:
+		removes.append({"tile": _drag_start_tile, "id": _drag_seed_id})
 	var in_dir := (_drag_seed_dir + 2) % 4
 	var ddir := _perp_dir(_drag_seed_dir, d)
 	var flipped := ((ddir + 3) % 4) == in_dir
-	var key := _drag_start_tile
-	if not _drag_placed.has(key):
-		_drag_placed[key] = true
-		if _drag_seed_id >= 0:
-			NetworkManager.remove(_drag_seed_id)
-		NetworkManager.place("belt_turn", key.x, key.y, ddir, flipped)
-	var run: Array = []
-	_append_run(run, _drag_start_tile + _dir_offset(ddir), ddir, cur)
-	_place(run)
+	placements.append({"tile": _drag_start_tile, "type": "belt_turn", "dir": ddir, "flipped": flipped})
+	_append_run(placements, _drag_start_tile + _dir_offset(ddir), ddir, cur)
+	return {"placements": placements, "removes": removes}
 
 
-# Sends a place order for every placement not already sent during this drag.
-func _place(placements: Array) -> void:
-	for p in placements:
-		var key: Vector2i = p["tile"]
-		if _drag_placed.has(key):
-			continue
-		_drag_placed[key] = true
-		NetworkManager.place(p["type"], key.x, key.y, p["dir"], p.get("flipped", false))
+# Stores the computed layout for the current frame and updates the layer's
+# transparent drag preview. Rebuilding wholesale each frame means the preview
+# always reflects the current cursor, shrinking as the drag is pulled back.
+func _apply_layout(layout: Dictionary) -> void:
+	_drag_placed.clear()
+	_drag_removes.clear()
+	for r in layout.get("removes", []):
+		_drag_removes[r["tile"]] = int(r.get("id", -1))
+	for p in layout.get("placements", []):
+		_drag_placed[p["tile"]] = p
+	layer.set_drag_preview(_drag_placed, _drag_removes)
 
 
-# Appends `count` straight belt placements starting at `from` and stepping in
-# `dir`, extending at least until the line of tiles reaches `cur`.
+# Appends straight belt placements starting at `from` and stepping in `dir`,
+# covering every tile from `from` up to and including `cur`.
 func _append_run(placements: Array, from: Vector2i, dir: int, cur: Vector2i) -> void:
 	var off := _dir_offset(dir)
 	var fc := _coord(dir, from)
 	var cc := _coord(dir, cur)
-	var count := maxi(1, absi(cc - fc))
+	var count := absi(cc - fc) + 1
 	var t := from
 	for i in count:
 		placements.append({"tile": t, "type": "belt", "dir": dir})
@@ -280,6 +300,8 @@ func _perp_dir(seed_dir: int, d: Vector2i) -> int:
 
 
 func _update_preview() -> void:
+	if _drag_active:
+		return
 	if _selected == "" or NetworkManager.player_id == "":
 		layer.clear_preview()
 		return
@@ -291,6 +313,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_F12:
 			_set_debug(not _debug_visible)
+		elif event.keycode == KEY_F1:
+			_toggle_ui()
 		elif event.keycode == KEY_F11:
 			_show_grid = not _show_grid
 			layer.set_show_grid(_show_grid)
@@ -306,6 +330,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _set_debug(on: bool) -> void:
 	_debug_visible = on
 	hud_label.visible = on
+
+
+func _toggle_ui() -> void:
+	_ui_visible = not _ui_visible
+	ui_root.visible = _ui_visible
 
 
 func _zoom(factor: float) -> void:

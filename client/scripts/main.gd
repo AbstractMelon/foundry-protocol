@@ -53,7 +53,7 @@ func _ready() -> void:
 	NetworkManager.disconnected.connect(_on_disconnected)
 	console.text_submitted.connect(_on_console_submitted)
 
-	if NetworkManager.auto_connect:
+	if NetworkManager.is_connect_pending():
 		hud_label.text = "connecting to %s..." % NetworkManager.ws_url
 	else:
 		NetworkManager.connect_to_server(NetworkManager.ws_url)

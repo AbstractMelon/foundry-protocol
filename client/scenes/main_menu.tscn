@@ -1,0 +1,82 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" uid="uid://ddey1aurp8f0j" path="res://scripts/main_menu.gd" id="1_menu"]
+
+[node name="MainMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_menu")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.055, 0.067, 0.078, 1)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Box" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="Center/Box"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 46
+theme_override_colors/font_color = Color(0.86, 0.9, 0.92, 1)
+text = "FOUNDRY PROTOCOL"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="Center/Box"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.6, 0.72, 0.62, 1)
+text = "persistent factory combat"
+horizontal_alignment = 1
+
+[node name="Spacer1" type="Control" parent="Center/Box"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+
+[node name="Who" type="Label" parent="Center/Box"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.6, 0.68, 0.62, 1)
+text = "WHO ARE YOU?"
+
+[node name="NameEdit" type="LineEdit" parent="Center/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 0)
+layout_mode = 2
+placeholder_text = "Enter your name"
+max_length = 24
+
+[node name="Spacer2" type="Control" parent="Center/Box"]
+custom_minimum_size = Vector2(0, 6)
+layout_mode = 2
+
+[node name="PlayButton" type="Button" parent="Center/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+text = "Browse Servers"
+
+[node name="Version" type="Label" parent="Center/Box"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+theme_override_colors/font_color = Color(0.45, 0.5, 0.48, 1)
+text = "1.0.0"
+horizontal_alignment = 1

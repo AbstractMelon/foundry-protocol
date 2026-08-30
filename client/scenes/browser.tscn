@@ -1,0 +1,132 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" uid="uid://cvind20qdc1uc" path="res://scripts/browser.gd" id="1_browser"]
+
+[node name="Browser" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_browser")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.055, 0.067, 0.078, 1)
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 24
+
+[node name="MainBox" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="Margin/MainBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="BackButton" type="Button" parent="Margin/MainBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "< Back"
+
+[node name="Title" type="Label" parent="Margin/MainBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+theme_override_colors/font_color = Color(0.88, 0.92, 0.94, 1)
+text = "Server Gateways"
+
+[node name="PlayerLabel" type="Label" parent="Margin/MainBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.6, 0.72, 0.62, 1)
+vertical_alignment = 1
+text = "playing as ..."
+
+[node name="AddGatewaySection" type="VBoxContainer" parent="Margin/MainBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="AddLabel" type="Label" parent="Margin/MainBox/AddGatewaySection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.72, 0.8, 0.7, 1)
+text = "ADD A GATEWAY"
+
+[node name="AddRow" type="HBoxContainer" parent="Margin/MainBox/AddGatewaySection"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NewGatewayEdit" type="LineEdit" parent="Margin/MainBox/AddGatewaySection/AddRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "gateway host, e.g. localhost:8080 or example.com"
+
+[node name="AddGatewayBtn" type="Button" parent="Margin/MainBox/AddGatewaySection/AddRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Add"
+
+[node name="SectionLabel" type="Label" parent="Margin/MainBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.72, 0.8, 0.7, 1)
+text = "SAVED GATEWAYS"
+
+[node name="Panel" type="PanelContainer" parent="Margin/MainBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PanelMargin" type="MarginContainer" parent="Margin/MainBox/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 12
+
+[node name="PanelBox" type="VBoxContainer" parent="Margin/MainBox/Panel/PanelMargin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Scroll" type="ScrollContainer" parent="Margin/MainBox/Panel/PanelMargin/PanelBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Content" type="VBoxContainer" parent="Margin/MainBox/Panel/PanelMargin/PanelBox/Scroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="BackToListButton" type="Button" parent="Margin/MainBox/Panel/PanelMargin/PanelBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "Back to gateways"
+
+[node name="Status" type="Label" parent="Margin/MainBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.7, 0.35, 1)

@@ -7,6 +7,7 @@ signal snapshot_received(msg)
 signal diff_received(msg)
 signal chat_received(msg)
 signal system_received(msg)
+signal servers_fetched(gateway_url, servers, error_text)
 
 const RECONNECT_DELAY := 2.0
 const SOCKET_BUFFER_SIZE := 16 * 1024 * 1024
@@ -23,17 +24,18 @@ var _retry := 0.0
 
 
 func _ready() -> void:
-	auto_connect = ProjectSettings.get_setting("network/auto_connect", false)
+	auto_connect = Settings.is_dev()
 	ws_url = ProjectSettings.get_setting("network/ws_url", "ws://localhost:8090/ws")
-	player_name = ProjectSettings.get_setting("network/player_name", "Dev")
+	player_name = Settings.player_name
 	var env_url := OS.get_environment("FOUNDRY_WS_URL")
 	if env_url != "":
 		ws_url = env_url
+	var url_arg: String = str(Settings.custom_user_args.get("ws", ""))
+	if url_arg != "":
+		ws_url = url_arg
 	connected.connect(_on_socket_connected)
 	if auto_connect:
 		connect_to_server(ws_url)
-	else:
-		_socket = make_socket(ws_url)
 
 
 func make_socket(url: String) -> WebSocketPeer:
@@ -50,6 +52,8 @@ func _on_socket_connected(_url: String) -> void:
 
 
 func _process(delta: float) -> void:
+	if _socket == null:
+		return
 	var state := _socket.get_ready_state()
 	if state == WebSocketPeer.STATE_OPEN:
 		_socket.poll()
@@ -81,7 +85,11 @@ func connect_to_server(url: String) -> void:
 
 
 func is_connected_to_server() -> bool:
-	return _socket.get_ready_state() == WebSocketPeer.STATE_OPEN
+	return _socket != null and _socket.get_ready_state() == WebSocketPeer.STATE_OPEN
+
+
+func is_connect_pending() -> bool:
+	return _socket != null and _socket.get_ready_state() != WebSocketPeer.STATE_CLOSED
 
 
 func get_ping() -> float:
@@ -131,3 +139,44 @@ func remove(entity_id: int) -> void:
 
 func chat(text: String) -> void:
 	send_message({"type": "chat", "text": text})
+
+
+func normalize_gateway_url(url: String) -> String:
+	var u := url.strip_edges()
+	if u == "" or u == "http://" or u == "https://":
+		return ""
+	if not u.begins_with("http://") and not u.begins_with("https://"):
+		u = "http://" + u
+	u = u.trim_suffix("/")
+	return u
+
+
+func fetch_servers(gateway_url: String) -> void:
+	var base := normalize_gateway_url(gateway_url)
+	if base == "":
+		servers_fetched.emit(gateway_url, [], "invalid gateway URL")
+		return
+	var http := HTTPRequest.new()
+	http.timeout = 8.0
+	add_child(http)
+	http.request_completed.connect(_on_servers_fetched.bind(http, base))
+	var err := http.request(base + "/servers")
+	if err != OK:
+		servers_fetched.emit(base, [], "failed to reach gateway")
+		http.queue_free()
+
+
+func _on_servers_fetched(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray, http: HTTPRequest, base: String) -> void:
+	http.queue_free()
+	if result != HTTPRequest.RESULT_SUCCESS:
+		servers_fetched.emit(base, [], "failed to reach gateway (HTTP error %d)" % result)
+		return
+	if code != 200:
+		servers_fetched.emit(base, [], "gateway returned HTTP %d" % code)
+		return
+	var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
+	if typeof(parsed) != TYPE_DICTIONARY:
+		servers_fetched.emit(base, [], "gateway returned invalid response")
+		return
+	var servers: Array = parsed.get("servers", [])
+	servers_fetched.emit(base, servers, "")

@@ -8,24 +8,21 @@
 
 config_version=5
 
-[animation]
-
-compatibility/default_parent_skeleton_in_mesh_instance_3d=true
-
 [application]
 
 config/name="Foundry Protocol"
-run/main_scene="res://scenes/main.tscn"
+run/main_scene="res://scenes/main_menu.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
 
 [autoload]
 
 NetworkManager="*res://autoload/network_manager.gd"
+Settings="*res://autoload/settings.gd"
 
 [network]
 
-auto_connect=true
+auto_connect=false
 ws_url="ws://localhost:8090/ws"
 player_name="Dev"
 

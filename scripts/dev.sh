@@ -49,8 +49,8 @@ fi
 if [ "$LAUNCH_CLIENT" = "1" ]; then
   sleep 3
   if command -v godot >/dev/null 2>&1; then
-    echo "[dev] launching client..."
-    godot --path client &
+    echo "[dev] launching client in dev mode..."
+    godot --path client -- --dev &
     pids+=($!)
   else
     echo "[dev] godot not found on PATH — open client/ in the Godot editor instead."
@@ -60,7 +60,9 @@ fi
 cat <<'EOF'
 
 Cheatsheet
-  Play game      : godot --path client   (or re-run this script with --client)
+  Play game      : godot --path client -- --dev                 (dev: skip menu, auto-connect to local world)
+  Normal join    : godot --path client                          (menu -> name -> gateway -> servers -> join)
+                  set a name at launch:  godot --path client -- --user Zed
   Open editor    : godot -e --path client
   Run tests      : ./scripts/test.sh
   In-game (dev)  : /give copper 500  /set iron 10  /clear  /help  (in chat box)

@@ -16,8 +16,7 @@ to build factories, defend them, and fight to be the last base standing.
 ./scripts/dev.sh --client
 ```
 
-This boots a world server in **dev mode** and the gateway with hot reload, then opens
-the Godot client.
+This boots a world server in **dev mode** and the gateway with hot reload, then opens the Godot client (skipping the menu straight into the local dev world).
 
 Dev-mode chat commands (server-side, any player):
 
@@ -90,3 +89,13 @@ buildings:
 ```
 
 Save the file and the running dev world server rebuilds itself.
+
+### Client launch args
+
+Godot custom args come after `--`. Available keys:
+
+| Arg              | Effect                                                        |
+| ---------------- | ------------------------------------------------------------- |
+| `-- --dev`       | Skip the menu and auto-connect to the local dev world.        |
+| `-- --ws wss://…`| Override the world URL used by dev/auto-connect mode.         |
+| `-- --user Melon`| Prefill the player name (also settable in the menu).          |

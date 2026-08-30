@@ -61,6 +61,6 @@ echo "==> Done"
 pm2 status
 echo ""
 echo "Next: point your reverse proxy at 127.0.0.1:4283 (gateway) and"
-echo "      127.0.0.1:63566 (world ws), then set the public ws_url in"
+echo "      127.0.0.1:36743 (world ws), then set the public ws_url in"
 echo "      deploy/servers.prod.yaml to wss://<your-world-domain>/ws"
 echo "      and re-run ./scripts/deploy.sh"

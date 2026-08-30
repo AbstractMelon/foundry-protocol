@@ -19,7 +19,7 @@ module.exports = {
       name: 'foundry-world',
       cwd: APP_DIR,
       script: path.join(APP_DIR, 'bin', 'world'),
-      args: '-addr :63566 -world main -autosave-ticks 600',
+      args: '-addr :36743 -world main -autosave-ticks 600',
       interpreter: 'none',
       env,
       autorestart: true,

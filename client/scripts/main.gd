@@ -113,7 +113,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_zoom(1.0 / ZOOM_STEP)
 			return
 	if event is InputEventMouseMotion and _panning:
-		camera.position = _cam_origin - (event.position - _pan_origin)
+		camera.position = _cam_origin - (event.position - _pan_origin) / camera.zoom.x
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
 		if _drag_active:
